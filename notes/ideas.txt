@@ -1,0 +1,9 @@
+Project name: MyRoteBoat
+
+We are starting a new project, a large new project. We'll need to discuss a lot of design first, and them we'll begin implementing.
+
+We'll start be making it source data from a local data store, a set of all my gmail emails and google drive files exported on this laptop. In the future, I'll want to plug this directly into my actual live remote email and drive, but for now my file snapshot will be a safe way to experiement and develop against.
+~/Downloads/all-my-google-files.
+
+ 
+

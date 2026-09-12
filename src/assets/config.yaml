@@ -1,0 +1,24 @@
+# MyRoteBoat config -- single edit point for tuning. One-line labels only;
+# full prose per key lives in CONFIG_REFERENCE.md under the same dotted name.
+
+server:
+  host: "127.0.0.1"        # bind address; localhost only
+  port: 8474               # web UI port
+  debug: true              # flask auto-reload + tracebacks
+
+data:
+  stash_dir: "~/Downloads/all-my-google-files"   # read-only local file stash
+
+agent:
+  queue_dir: "queue"       # request/response file queue root (repo-relative)
+  poll_ms: 1000            # browser poll interval while a request is pending
+
+logging:
+  enabled: true            # session logs under sessions/
+
+snippets:
+  count: 5                 # how many snippets the left column shows
+  max_chars: 2000          # truncate snippet content beyond this
+
+ui:
+  title: "MyRoteBoat"      # page/tab title

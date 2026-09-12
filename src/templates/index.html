@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+<style>
+  /* Minimal, calm, no-popup interface (agents.md core values). */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Georgia, serif;
+    background: #f7f6f2;
+    color: #222;
+  }
+  header {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid #ccc;
+    font-size: 1.1rem;
+  }
+  header .stash-note {
+    float: right;
+    font-size: 0.8rem;
+    color: #777;
+  }
+  /* The 2-column split: dossier snippets left, per-snippet chat right. */
+  .columns {
+    display: flex;
+    height: calc(100vh - 3rem);
+  }
+  .col {
+    width: 50%;
+    overflow-y: auto;
+    padding: 1rem;
+  }
+  .col-left  { border-right: 1px solid #ccc; }
+  .placeholder {
+    margin-top: 30vh;
+    text-align: center;
+    color: #999;
+    font-style: italic;
+  }
+  /* Snippet card: provenance header + verbatim body. */
+  .snippet {
+    border: 1px solid #ccc;
+    background: #fff;
+    margin-bottom: 1rem;
+  }
+  .snippet-provenance {
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid #ddd;
+    background: #efede7;
+    font-size: 0.8rem;
+    color: #555;
+  }
+  .snippet-provenance .account {
+    display: inline-block;
+    padding: 0 0.4rem;
+    border: 1px solid #999;
+    border-radius: 3px;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-right: 0.5rem;
+  }
+  .snippet-provenance .name { font-weight: bold; color: #222; }
+  .snippet-provenance .disk-path { color: #999; }
+  .snippet-content {
+    margin: 0;
+    padding: 0.6rem;
+    max-height: 16rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: Menlo, monospace;
+    font-size: 0.8rem;
+  }
+  .truncated-note {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+    font-style: italic;
+    color: #999;
+    border-top: 1px dashed #ddd;
+  }
+  /* Chat card: one per snippet, same order as the left column. */
+  .chat {
+    border: 1px solid #ccc;
+    background: #fff;
+    margin-bottom: 1rem;
+  }
+  .chat-label {
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid #ddd;
+    background: #efede7;
+    font-size: 0.8rem;
+    color: #555;
+  }
+  .chat textarea {
+    display: block;
+    width: 100%;
+    border: none;
+    resize: vertical;
+    min-height: 5rem;
+    padding: 0.6rem;
+    font-family: Georgia, serif;
+    font-size: 0.9rem;
+    background: #fff;
+  }
+  .chat textarea:disabled { color: #999; background: #f4f3ef; }
+  .chat-actions {
+    padding: 0.3rem 0.6rem;
+    border-top: 1px solid #ddd;
+    text-align: right;
+  }
+  .chat-actions button {
+    font-family: Georgia, serif;
+    font-size: 0.85rem;
+    padding: 0.2rem 0.9rem;
+    cursor: pointer;
+  }
+  /* Loading spinner: a quiet rotating ring, shown only while pending. */
+  .spinner {
+    display: none;
+    width: 0.9rem;
+    height: 0.9rem;
+    margin-right: 0.6rem;
+    vertical-align: middle;
+    border: 2px solid #ddd;
+    border-top-color: #666;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  .chat.pending .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <header>
+    {{ title }}
+    <span class="stash-note">
+      stash: {{ stash.path }} &mdash;
+      {% if stash.exists %}
+        {{ stash.entry_count }} top-level entries
+      {% else %}
+        NOT FOUND
+      {% endif %}
+    </span>
+  </header>
+
+  <div class="columns">
+    <div class="col col-left">
+      {% for snippet in snippets %}
+      <div class="snippet">
+        <div class="snippet-provenance">
+          <span class="account">{{ snippet.account }}</span>
+          <span class="name">{{ snippet.name }}</span>
+          {% if snippet.folder %} &mdash; {{ snippet.folder }}{% endif %}
+          <br>
+          <span class="disk-path">{{ snippet.disk_path }}</span>
+        </div>
+        <pre class="snippet-content" id="snippet-content-{{ loop.index0 }}">{{ snippet.content }}</pre>
+        {% if snippet.truncated %}
+        <div class="truncated-note">&hellip; truncated at {{ snippet.content | length }} chars; full file on disk</div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="placeholder">Retrieved snippets will appear here.</div>
+      {% endfor %}
+    </div>
+    <div class="col col-right">
+      {% for snippet in snippets %}
+      <div class="chat" id="chat-{{ loop.index0 }}" data-disk-path="{{ snippet.disk_path }}">
+        <div class="chat-label">re: <b>{{ snippet.name }}</b></div>
+        <textarea placeholder="Ask about this snippet&hellip;"></textarea>
+        <div class="chat-actions">
+          <span class="spinner"></span>
+          <button onclick="processChat({{ loop.index0 }})">process</button>
+        </div>
+      </div>
+      {% else %}
+      <div class="placeholder">Per-snippet chat boxes will appear here.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+<script>
+  const POLL_MS = {{ poll_ms }};
+
+  function processChat(idx) {
+    const chat = document.getElementById("chat-" + idx);
+    const box = chat.querySelector("textarea");
+    const button = chat.querySelector("button");
+    const body = { disk_path: chat.dataset.diskPath, prompt: box.value };
+    chat.classList.add("pending");
+    box.disabled = true;
+    button.disabled = true;
+    fetch("/process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then((r) => r.json())
+      .then((data) => pollForResponse(idx, data.request_id));
+  }
+
+  function pollForResponse(idx, requestId) {
+    fetch("/poll/" + requestId)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.done) {
+          deliverResponse(idx, data.response);
+        } else {
+          setTimeout(() => pollForResponse(idx, requestId), POLL_MS);
+        }
+      });
+  }
+
+  function deliverResponse(idx, responseText) {
+    const chat = document.getElementById("chat-" + idx);
+    const box = chat.querySelector("textarea");
+    box.value = responseText;   // replaces the user's prompt, by design
+    box.disabled = false;
+    chat.querySelector("button").disabled = false;
+    chat.classList.remove("pending");
+    refreshSnippet(idx, chat.dataset.diskPath);
+  }
+
+  function refreshSnippet(idx, diskPath) {
+    fetch("/snippet?path=" + encodeURIComponent(diskPath))
+      .then((r) => r.json())
+      .then((snippet) => {
+        const pre = document.getElementById("snippet-content-" + idx);
+        pre.textContent = snippet.content;
+      });
+  }
+</script>
+</body>
+</html>

@@ -28,7 +28,9 @@ delete files in the stash. Live Gmail/Drive integration may come later.
 ## User session shape
 
 1. Jeff types a chat request; 3–4 rounds of follow-up questions refine it.
-2. The UI shows a 2-column layout, split down the middle:
+2. The UI shows a 2-column layout, split down the middle. ONE scrollbar
+   drives both columns: each snippet and its chat box form an aligned row
+   (tops flush), with blank space padding the shorter side.
    - LEFT: retrieved snippets/documents, shown verbatim as stored. Every
      snippet displays its provenance: file name, original/effective dir path,
      and which account it came from.

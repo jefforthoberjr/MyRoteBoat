@@ -22,17 +22,27 @@
     font-size: 0.8rem;
     color: #777;
   }
-  /* The 2-column split: dossier snippets left, per-snippet chat right. */
-  .columns {
-    display: flex;
+  /* Single scroll of paired rows: snippet left, its chat right, tops always
+     aligned. The taller side sets the row height; the shorter side gets
+     blank space. Cells stretch so the center divider is continuous. */
+  .rows {
     height: calc(100vh - 3rem);
-  }
-  .col {
-    width: 50%;
     overflow-y: auto;
-    padding: 1rem;
+    display: flex;
+    flex-direction: column;
   }
-  .col-left  { border-right: 1px solid #ccc; }
+  .row { display: flex; }
+  .cell {
+    width: 50%;
+    padding: 1rem 1rem 0 1rem;
+  }
+  .cell-left { border-right: 1px solid #ccc; }
+  .rows-tail {
+    display: flex;
+    min-height: 2rem;
+    flex-grow: 1;
+  }
+  .rows-tail .cell { padding: 0; }
   .placeholder {
     margin-top: 30vh;
     text-align: center;
@@ -145,39 +155,48 @@
     </span>
   </header>
 
-  <div class="columns">
-    <div class="col col-left">
-      {% for snippet in snippets %}
-      <div class="snippet">
-        <div class="snippet-provenance">
-          <span class="account">{{ snippet.account }}</span>
-          <span class="name">{{ snippet.name }}</span>
-          {% if snippet.folder %} &mdash; {{ snippet.folder }}{% endif %}
-          <br>
-          <span class="disk-path">{{ snippet.disk_path }}</span>
+  <div class="rows">
+    {% for snippet in snippets %}
+    <div class="row">
+      <div class="cell cell-left">
+        <div class="snippet">
+          <div class="snippet-provenance">
+            <span class="account">{{ snippet.account }}</span>
+            <span class="name">{{ snippet.name }}</span>
+            {% if snippet.folder %} &mdash; {{ snippet.folder }}{% endif %}
+            <br>
+            <span class="disk-path">{{ snippet.disk_path }}</span>
+          </div>
+          <pre class="snippet-content" id="snippet-content-{{ loop.index0 }}">{{ snippet.content }}</pre>
+          {% if snippet.truncated %}
+          <div class="truncated-note">&hellip; truncated at {{ snippet.content | length }} chars; full file on disk</div>
+          {% endif %}
         </div>
-        <pre class="snippet-content" id="snippet-content-{{ loop.index0 }}">{{ snippet.content }}</pre>
-        {% if snippet.truncated %}
-        <div class="truncated-note">&hellip; truncated at {{ snippet.content | length }} chars; full file on disk</div>
-        {% endif %}
       </div>
-      {% else %}
-      <div class="placeholder">Retrieved snippets will appear here.</div>
-      {% endfor %}
+      <div class="cell cell-right">
+        <div class="chat" id="chat-{{ loop.index0 }}" data-disk-path="{{ snippet.disk_path }}">
+          <div class="chat-label">re: <b>{{ snippet.name }}</b></div>
+          <textarea placeholder="Ask about this snippet&hellip;"></textarea>
+          <div class="chat-actions">
+            <span class="spinner"></span>
+            <button onclick="processChat({{ loop.index0 }})">process</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="col col-right">
-      {% for snippet in snippets %}
-      <div class="chat" id="chat-{{ loop.index0 }}" data-disk-path="{{ snippet.disk_path }}">
-        <div class="chat-label">re: <b>{{ snippet.name }}</b></div>
-        <textarea placeholder="Ask about this snippet&hellip;"></textarea>
-        <div class="chat-actions">
-          <span class="spinner"></span>
-          <button onclick="processChat({{ loop.index0 }})">process</button>
-        </div>
+    {% else %}
+    <div class="row">
+      <div class="cell cell-left">
+        <div class="placeholder">Retrieved snippets will appear here.</div>
       </div>
-      {% else %}
-      <div class="placeholder">Per-snippet chat boxes will appear here.</div>
-      {% endfor %}
+      <div class="cell cell-right">
+        <div class="placeholder">Per-snippet chat boxes will appear here.</div>
+      </div>
+    </div>
+    {% endfor %}
+    <div class="rows-tail">
+      <div class="cell cell-left"></div>
+      <div class="cell cell-right"></div>
     </div>
   </div>
 

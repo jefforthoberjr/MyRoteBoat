@@ -14,6 +14,11 @@ dossier.json shape (the template's contract):
     prompt           the top-box text as last submitted
     prompt_response  the agent's answer to the top box ("" until answered)
     prompt_finished  when that answer landed ("" until answered)
+    view             "explore" (one wide item diagram) | "mapping" (items
+                     left, goals/tasks right); the agent's call, user-toggled
+    tasks            [{"label", "kind": "goal"|"task", "goal": <goal label or ""}]
+                     the mapping view's right-hand diagram; [] until the
+                     agent sends some
     items            [{"ref": <stash path or mail:<acct>:<idx>>,
                        "chat_response": "", "finished": ""}]
                      (older files used "disk_path"; load_dossier migrates)
@@ -111,6 +116,8 @@ def create_dossier(prompt):
         "prompt": prompt,
         "prompt_response": "",
         "prompt_finished": "",
+        "view": CONFIG["dossiers"]["default_view"],
+        "tasks": [],
         "items": [],
     }
     dossier_dir(dossier["id"]).mkdir(parents=True, exist_ok=True)
@@ -138,6 +145,9 @@ def load_dossier(dossier_id):
         for item in result["items"]:
             if "ref" not in item:   # pre-mail dossiers stored disk_path
                 item["ref"] = item.pop("disk_path")
+        if "view" not in result:    # pre-mapping dossiers
+            result["view"] = CONFIG["dossiers"]["default_view"]
+            result["tasks"] = []
     return result
 
 
@@ -172,12 +182,31 @@ def valid_found_paths(found_paths):
     return kept, dropped
 
 
-def apply_response(request_payload, kind, response_text, found_paths):
+def valid_tasks(raw_tasks):
+    """Normalize an agent's goals/tasks list: each entry needs a non-empty
+    label; kind defaults to "task" (only "goal"/"task" allowed); goal is
+    the label of the goal a task hangs under ("" = none). Junk entries are
+    dropped. None in -> None out (meaning: leave the saved list alone)."""
+    result = None
+    if raw_tasks is not None:
+        result = []
+        for raw in raw_tasks:
+            label = str(raw.get("label", "")).strip()
+            kind = raw.get("kind", "task")
+            if label != "" and kind in ("goal", "task"):
+                result.append({"label": label, "kind": kind,
+                               "goal": str(raw.get("goal", "")).strip()})
+    return result
+
+
+def apply_response(request_payload, kind, response_text, found_paths,
+                   view, tasks):
     """Save a completed request's outcome into its dossier: an "answer" to
-    the session scope sets prompt_response and merges found_paths into
-    items; an answer to a snippet scope sets that item's chat_response.
-    Non-answer kinds save nothing (the UI keeps the prompt for a retry).
-    Returns the dossier dict, or None if it no longer exists."""
+    the session scope sets prompt_response, merges found_paths into items,
+    and -- when the agent sent them -- sets the view and replaces the
+    goals/tasks list; an answer to a snippet scope sets that item's
+    chat_response. Non-answer kinds save nothing (the UI keeps the prompt
+    for a retry). Returns the dossier dict, or None if it no longer exists."""
     dossier = load_dossier(request_payload["dossier_id"])
     if dossier is not None and kind == "answer":
         stamp = rule_finished_stamp()
@@ -185,6 +214,10 @@ def apply_response(request_payload, kind, response_text, found_paths):
             dossier["prompt_response"] = response_text
             dossier["prompt_finished"] = stamp
             dossier["items"] = rule_merge_found(dossier["items"], found_paths)
+            if view in ("explore", "mapping"):
+                dossier["view"] = view
+            if tasks is not None:
+                dossier["tasks"] = tasks
         else:
             target = request_payload["snippet"]["ref"]
             for item in dossier["items"]:
@@ -193,6 +226,18 @@ def apply_response(request_payload, kind, response_text, found_paths):
                     item["finished"] = stamp
         save_dossier(dossier)
     return dossier
+
+
+def set_view(dossier_id, view):
+    """The user's explore/mapping toggle, saved so a reload keeps it.
+    Returns True if saved, False for an unknown dossier or view."""
+    result = False
+    dossier = load_dossier(dossier_id)
+    if dossier is not None and view in ("explore", "mapping"):
+        dossier["view"] = view
+        save_dossier(dossier)
+        result = True
+    return result
 
 
 def remove_item(dossier_id, ref):

@@ -32,6 +32,7 @@ logging:
 dossiers:
   dir: "dossiers"          # saved dossiers root (repo-relative): <id>/dossier.json + session.log
   title_chars: 60          # landing-list title = prompt's first line cut here
+  default_view: "explore"  # diagram view for a new dossier until the agent/user picks: explore | mapping
   found_merge: "replace"   # session answer's found list replaces the items (keeps surviving chats)
   # found_merge: "append"  # keep existing items, add newly found ones after
 
@@ -42,12 +43,15 @@ snippets:
   max_chars: 2000          # truncate snippet content beyond this
 
 diagram:
-  direction: "TB"          # mermaid flowchart direction: TB = one row of boxes, chains hang down
+  direction: "TB"          # explore view items layout: TB = one row of boxes, chains hang down
   # direction: "LR"        # left-to-right: unconnected boxes stack into a tall column
+  mapping_direction: "LR"  # mapping view items layout (half width): LR = tall column, chains go sideways
   label_chars: 40          # node label: item name cut here
   kinds:                   # per item kind: legend label + box colors (used by legend and item diagram)
     file: {label: "drive / file", fill: "#eeeeee", stroke: "#999999"}
     mail: {label: "email", fill: "#e3ecf5", stroke: "#88aaaa"}
+    goal: {label: "goal", fill: "#f5e9c8", stroke: "#b7961f"}
+    task: {label: "task", fill: "#e6f2e3", stroke: "#6a9a5f"}
   chain: "headers"         # mail arrows follow In-Reply-To / References (real reply threads)
   # chain: "sender"        # mail arrows chain each sender's mails in date order (drip campaigns)
   # chain: "none"          # boxes only, no arrows

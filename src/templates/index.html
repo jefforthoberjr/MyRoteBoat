@@ -74,6 +74,16 @@
     cursor: pointer;
   }
   .diagram .empty-note { padding: 0.6rem; color: #999; font-style: italic; }
+  /* View switch: explore = one wide items diagram; mapping = items left,
+     goals/tasks right. The active button reads pressed. */
+  .diagram .chat-label button.active { background: #ccc; font-weight: bold; }
+  .diagram-panes { display: flex; }
+  .diagram-pane { width: 100%; }
+  .diagram-pane.hidden { display: none; }
+  .diagram.mapping .diagram-pane { width: 50%; }
+  .diagram.mapping .diagram-pane.hidden { display: block; }
+  .diagram.mapping .diagram-pane-items { border-right: 1px solid #ccc; }
+  .diagram.mapping { max-height: 60vh; }
   /* Legend: a one-row mermaid diagram of the kind colors, above the items. */
   .legend {
     margin: 0 1rem 0.5rem 1rem;
@@ -288,17 +298,29 @@
       legend:
       <pre class="mermaid">{{ legend_source }}</pre>
     </div>
-    <div class="diagram" id="diagram">
+    <div class="diagram {{ dossier.view }}" id="diagram">
       <div class="chat-label">
+        {# floats stack right-to-left, so DOM order is the reverse of what shows #}
         <button onclick="refreshDiagram()">refresh diagram</button>
+        <button id="view-mapping" onclick="setView('mapping')">mapping</button>
+        <button id="view-explore" onclick="setView('explore')">explore</button>
         items &mdash; click a box to jump to it
       </div>
-      <div id="diagram-body">
-        {% if snippets %}
-        <pre class="mermaid">{{ diagram_source }}</pre>
-        {% else %}
-        <div class="empty-note">no items</div>
-        {% endif %}
+      <div class="diagram-panes">
+        <div class="diagram-pane diagram-pane-items" id="diagram-body">
+          {% if snippets %}
+          <pre class="mermaid">{{ diagram_source }}</pre>
+          {% else %}
+          <div class="empty-note">no items</div>
+          {% endif %}
+        </div>
+        <div class="diagram-pane hidden" id="tasks-body">
+          {% if dossier.tasks %}
+          <pre class="mermaid">{{ tasks_source }}</pre>
+          {% else %}
+          <div class="empty-note">no goals or tasks yet</div>
+          {% endif %}
+        </div>
       </div>
     </div>
     {% for snippet in snippets %}
@@ -474,21 +496,50 @@
   }
 
   function refreshDiagram() {
-    // Re-render from the dossier as saved now (after removals / answers).
-    const body = document.getElementById("diagram-body");
+    // Re-render both panes from the dossier as saved now (after removals /
+    // answers), and follow the saved view (the agent may have set it).
     fetch("/dossier/" + DOSSIER_ID + "/diagram")
       .then((r) => r.json())
       .then((data) => {
         DIAGRAM_REFS = data.refs;
-        if (data.refs.length === 0) {
-          body.innerHTML = '<div class="empty-note">no items</div>';
-        } else {
-          mermaid.render("diagram-svg", data.source).then(function (out) {
-            body.innerHTML = out.svg;
-            if (out.bindFunctions) { out.bindFunctions(body); }
-          });
-        }
+        renderPane("diagram-body", "diagram-svg", data.source,
+                   data.refs.length, "no items");
+        renderPane("tasks-body", "tasks-svg", data.tasks_source,
+                   data.task_count, "no goals or tasks yet");
+        showView(data.view);
       });
+  }
+
+  function renderPane(paneId, svgId, source, count, emptyText) {
+    const pane = document.getElementById(paneId);
+    if (count === 0) {
+      pane.innerHTML = '<div class="empty-note">' + emptyText + '</div>';
+    } else {
+      mermaid.render(svgId, source).then(function (out) {
+        pane.innerHTML = out.svg;
+        if (out.bindFunctions) { out.bindFunctions(pane); }
+      });
+    }
+  }
+
+  function showView(view) {
+    const box = document.getElementById("diagram");
+    box.classList.toggle("mapping", view === "mapping");
+    box.classList.toggle("explore", view !== "mapping");
+    document.getElementById("view-explore").classList.toggle("active", view !== "mapping");
+    document.getElementById("view-mapping").classList.toggle("active", view === "mapping");
+  }
+  showView("{{ dossier.view }}");
+
+  function setView(view) {
+    // Saved server-side so a reload keeps the choice (stable routes); the
+    // items diagram re-lays out for the new width, so refresh after.
+    showView(view);
+    fetch("/dossier/" + DOSSIER_ID + "/view", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ view: view }),
+    }).then(refreshDiagram);
   }
 
   function removeItem(idx) {

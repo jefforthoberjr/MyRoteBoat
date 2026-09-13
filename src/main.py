@@ -133,7 +133,7 @@ def handle_dossier(dossier_id):
                          "id=" + dossier_id + " items="
                          + str(len(dossier["items"]))
                          + " snippets=" + str(len(snippets)))
-        diagram_source = diagram.rule_diagram_source(snippets)
+        diagram_source = diagram.rule_diagram_source(snippets, dossier["view"])
         session_log.emit("10008", "diagram source built",
                          "nodes=" + str(len(snippets)) + " edges="
                          + str(len(diagram.rule_diagram_edges(snippets))))
@@ -149,6 +149,7 @@ def handle_dossier(dossier_id):
             diagram_source=diagram_source,
             diagram_refs=diagram_refs,
             legend_source=diagram.rule_legend_source(),
+            tasks_source=diagram.rule_tasks_source(dossier["tasks"]),
             poll_ms=CONFIG["agent"]["poll_ms"],
             heartbeat_ms=CONFIG["ui_heartbeat"]["interval_ms"],
         )
@@ -205,7 +206,7 @@ def handle_diagram(dossier_id):
     ---
     get:
       tags: [ui]
-      summary: Current Mermaid source for a dossier's items, plus the ref per node.
+      summary: Current Mermaid source for a dossier's items (plus ref per node), its goals/tasks diagram, and the saved view.
       parameters:
         - in: path
           name: dossier_id
@@ -213,7 +214,7 @@ def handle_diagram(dossier_id):
           schema: {type: string}
       responses:
         200:
-          description: '{"source": "<mermaid text>", "refs": [ref per node index]}'
+          description: '{"source": "<items mermaid>", "refs": [ref per node index], "tasks_source": "<tasks mermaid>", "task_count": N, "view": "explore|mapping"}'
         404:
           description: No such dossier.
     """
@@ -229,9 +230,41 @@ def handle_diagram(dossier_id):
                          "dossier=" + dossier_id + " nodes=" + str(len(refs))
                          + " edges="
                          + str(len(diagram.rule_diagram_edges(snippets))))
-        result = jsonify({"source": diagram.rule_diagram_source(snippets),
-                          "refs": refs})
+        result = jsonify({"source": diagram.rule_diagram_source(snippets, dossier["view"]),
+                          "refs": refs,
+                          "tasks_source": diagram.rule_tasks_source(dossier["tasks"]),
+                          "task_count": len(dossier["tasks"]),
+                          "view": dossier["view"]})
     return result
+
+
+def handle_set_view(dossier_id):
+    """The explore/mapping buttons: save the user's view choice.
+    ---
+    post:
+      tags: [ui]
+      summary: Save the dossier's diagram view (explore | mapping).
+      parameters:
+        - in: path
+          name: dossier_id
+          required: true
+          schema: {type: string}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                view: {type: string, enum: [explore, mapping]}
+      responses:
+        200:
+          description: '{"ok": true|false}'
+    """
+    view = request.get_json()["view"]
+    ok = dossier_store.set_view(dossier_id, view)
+    if ok:
+        session_log.emit("10010", "view toggled",
+                         "dossier=" + dossier_id + " view=" + view)
+    return jsonify({"ok": ok})
 
 
 def handle_remove_item(dossier_id):
@@ -391,6 +424,19 @@ def handle_agent_respond():
                   type: array
                   items: {type: string}
                   description: session scope only -- item refs found (stash-relative file path, or mail:<acct>:<idx> from the mail index); they become the dossier's items (left column). Refs that do not resolve are dropped.
+                view:
+                  type: string
+                  enum: [explore, mapping]
+                  description: session scope only, optional -- the agent's judgement of the diagram view (explore = retrieval-only prompt, mapping = the prompt states goals/tasks). Omit to leave the saved view alone.
+                tasks:
+                  type: array
+                  description: session scope only, optional -- goals and tasks stated by the prompt, for the mapping view. Replaces the saved list; omit to leave it alone.
+                  items:
+                    type: object
+                    properties:
+                      label: {type: string}
+                      kind: {type: string, enum: [goal, task], default: task}
+                      goal: {type: string, description: label of the goal this task hangs under; empty for none}
       responses:
         200:
           description: '{"ok": true, "dropped": [...]} or {"ok": false, "error": "..."}'
@@ -398,6 +444,8 @@ def handle_agent_respond():
     body = request.get_json()
     kind = body.get("kind", "answer")
     found, dropped = dossier_store.valid_found_paths(body.get("found", []))
+    view = body.get("view")
+    tasks = dossier_store.valid_tasks(body.get("tasks"))
     if kind not in ("answer", "error", "needs_human"):
         error = "unknown kind: " + kind
         request_payload = None
@@ -416,12 +464,15 @@ def handle_agent_respond():
             session_log.emit("30005", "agent found paths dropped",
                              "id=" + body["id"] + " paths=" + str(dropped))
         dossier = dossier_store.apply_response(request_payload, kind,
-                                               body["response"], found)
+                                               body["response"], found,
+                                               view, tasks)
         if dossier is not None:
             session_log.emit("30004", "dossier updated from response",
                              "dossier=" + dossier["id"] + " scope="
                              + request_payload["scope"] + " items="
-                             + str(len(dossier["items"])))
+                             + str(len(dossier["items"])) + " view="
+                             + dossier["view"] + " tasks="
+                             + str(len(dossier["tasks"])))
     return jsonify(result)
 
 
@@ -474,6 +525,8 @@ def create_app():
                      handle_remove_item, methods=["POST"])
     app.add_url_rule("/dossier/<dossier_id>/diagram", "diagram",
                      handle_diagram)
+    app.add_url_rule("/dossier/<dossier_id>/view", "set_view",
+                     handle_set_view, methods=["POST"])
     app.add_url_rule("/process", "process", handle_process, methods=["POST"])
     app.add_url_rule("/poll/<request_id>", "poll", handle_poll)
     app.add_url_rule("/snippet", "snippet", handle_snippet)

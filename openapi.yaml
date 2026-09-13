@@ -41,6 +41,35 @@ paths:
                     file path, or mail:<acct>:<idx> from the mail index); they become
                     the dossier's items (left column). Refs that do not resolve are
                     dropped.
+                view:
+                  type: string
+                  enum:
+                  - explore
+                  - mapping
+                  description: session scope only, optional -- the agent's judgement
+                    of the diagram view (explore = retrieval-only prompt, mapping
+                    = the prompt states goals/tasks). Omit to leave the saved view
+                    alone.
+                tasks:
+                  type: array
+                  description: session scope only, optional -- goals and tasks stated
+                    by the prompt, for the mapping view. Replaces the saved list;
+                    omit to leave it alone.
+                  items:
+                    type: object
+                    properties:
+                      label:
+                        type: string
+                      kind:
+                        type: string
+                        enum:
+                        - goal
+                        - task
+                        default: task
+                      goal:
+                        type: string
+                        description: label of the goal this task hangs under; empty
+                          for none
       responses:
         '200':
           description: '{"ok": true, "dropped": [...]} or {"ok": false, "error": "..."}'
@@ -66,7 +95,8 @@ paths:
     get:
       tags:
       - ui
-      summary: Current Mermaid source for a dossier's items, plus the ref per node.
+      summary: Current Mermaid source for a dossier's items (plus ref per node), its
+        goals/tasks diagram, and the saved view.
       parameters:
       - in: path
         name: dossier_id
@@ -75,7 +105,8 @@ paths:
           type: string
       responses:
         '200':
-          description: '{"source": "<mermaid text>", "refs": [ref per node index]}'
+          description: '{"source": "<items mermaid>", "refs": [ref per node index],
+            "tasks_source": "<tasks mermaid>", "task_count": N, "view": "explore|mapping"}'
         '404':
           description: No such dossier.
   /dossier/{dossier_id}:
@@ -183,6 +214,30 @@ paths:
       responses:
         '200':
           description: '{"ok": true, "item_count": N} or {"ok": false}'
+  /dossier/{dossier_id}/view:
+    post:
+      tags:
+      - ui
+      summary: Save the dossier's diagram view (explore | mapping).
+      parameters:
+      - in: path
+        name: dossier_id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                view:
+                  type: string
+                  enum:
+                  - explore
+                  - mapping
+      responses:
+        '200':
+          description: '{"ok": true|false}'
   /snippet:
     get:
       tags:

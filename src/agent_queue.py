@@ -14,8 +14,9 @@ Request json:  {"id", "dossier_id", "scope", "prompt", "snippet"} -- scope
 "snippet" carries the full snippet dict; scope "session" (the top box)
 carries snippet null. dossier_id says which dossier the answer saves into.
 Response json: {"id", "kind", "response": "<plain text>", "found": [...]}
-where found (session scope only) lists stash-relative paths the agent
-picked as the dossier's items.
+where found (session scope only) lists item refs the agent picked as the
+dossier's items. The agent may also send "view" and "tasks" (session
+scope); those go straight into the dossier, not the response file.
 
 The <id> is timestamped and unique per server run; a response file is only
 ever read after it exists in full (the agent writes via a temp-file rename,

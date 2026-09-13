@@ -74,6 +74,14 @@ debug/replay log, appended every time it is loaded). Gitignored.
 The landing page labels each dossier with the first line of its kickoff
 prompt, cut to this many characters.
 
+## dossiers.default_view
+Which diagram view a dossier opens in before anyone has chosen: `explore`
+(one wide diagram of the items, for retrieval-only prompts) or `mapping`
+(items diagram on the left, goals/tasks diagram on the right, for prompts
+that state goals). The runtime agent sets the view on its session-scope
+answer when it can judge; the two view buttons on the page override it and
+the choice is saved in the dossier.
+
 ## dossiers.found_merge
 What happens to a dossier's items when the agent answers the top (session
 scope) prompt with a `found` list. `replace`: the agent's list becomes the
@@ -105,13 +113,20 @@ bottom) lays UNCONNECTED items out as one horizontal row, with reply chains
 hanging down from their first mail -- compact in the 40vh box. `LR` stacks
 unconnected items into a tall column instead. Mermaid also accepts RL/BT.
 
+## diagram.mapping_direction
+Same knob for the items diagram when the mapping view shows it at half
+width. `LR` there stacks unconnected items into a tall narrow column with
+reply chains running sideways, spending height instead of shrinking the
+boxes to fit. Set it to `TB` to keep the explore layout (scaled down).
+
 ## diagram.label_chars
 Each diagram node shows the item's account and name; the name is cut at
 this many characters so a long Drive path doesn't blow the box wide.
 
 ## diagram.kinds
-One entry per item kind (`file`, `mail`; more as new sources arrive). Each
-gives the legend label and the box fill/stroke colors. Both the legend and
+One entry per node kind: item kinds (`file`, `mail`; more as new sources
+arrive) and the mapping view's `goal` and `task`. Each gives the legend
+label and the box fill/stroke colors. Both the legend and
 the item diagram build their Mermaid classDef lines from here, so a color
 tweak changes both in one place. An item whose kind is missing here falls
 back to Mermaid's default box.

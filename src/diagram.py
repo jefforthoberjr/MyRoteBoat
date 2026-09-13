@@ -11,10 +11,14 @@ from config import CONFIG
 
 # --- rules -------------------------------------------------------------------
 
-def rule_diagram_source(snippets):
-    """The whole Mermaid text for a dossier's items: direction from config
-    diagram.direction, one labeled node per item, click hooks, then edges."""
-    lines = ["flowchart " + CONFIG["diagram"]["direction"]]
+def rule_diagram_source(snippets, view):
+    """The whole Mermaid text for a dossier's items: direction per view
+    (config diagram.direction / diagram.mapping_direction), one labeled
+    node per item, click hooks, then edges."""
+    direction = CONFIG["diagram"]["direction"]
+    if view == "mapping":
+        direction = CONFIG["diagram"]["mapping_direction"]
+    lines = ["flowchart " + direction]
     for index, snippet in enumerate(snippets):
         node = "item" + str(index)
         lines.append(node + "[\"" + rule_node_label(snippet) + "\"]")
@@ -23,6 +27,26 @@ def rule_diagram_source(snippets):
             lines.append("class " + node + " " + snippet["kind"])
     for edge in rule_diagram_edges(snippets):
         lines.append(edge)
+    for line in _class_defs():
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def rule_tasks_source(tasks):
+    """The mapping view's right-hand diagram: goal boxes with their tasks
+    hanging below (edge goal --> task by goal label); tasks with no or an
+    unknown goal float free. Empty list -> a diagram with no nodes."""
+    lines = ["flowchart TB"]
+    goal_node = {}
+    for index, task in enumerate(tasks):
+        if task["kind"] == "goal":
+            goal_node[task["label"]] = "t" + str(index)
+    for index, task in enumerate(tasks):
+        node = "t" + str(index)
+        lines.append(node + "[\"" + _escape_label(task["label"]) + "\"]")
+        lines.append("class " + node + " " + task["kind"])
+        if task["kind"] == "task" and task["goal"] in goal_node:
+            lines.append(goal_node[task["goal"]] + " --> " + node)
     for line in _class_defs():
         lines.append(line)
     return "\n".join(lines)
@@ -45,12 +69,10 @@ def rule_legend_source():
 
 def rule_node_label(snippet):
     """What a node says: account tag + name, name cut at
-    diagram.label_chars. Files show the bare name; mail shows the date
-    too, since subjects repeat across a chain."""
+    diagram.label_chars. No dates (they cluttered the boxes); a chain's
+    order is carried by its arrows."""
     name = snippet["name"][:CONFIG["diagram"]["label_chars"]]
     label = snippet["account"] + ": " + name
-    if snippet["kind"] == "mail":
-        label = snippet["folder"][:10] + " " + label
     return _escape_label(label)
 
 

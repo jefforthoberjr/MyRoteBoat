@@ -135,6 +135,32 @@ file):
   - Keep it to the handful that matter (the column is meant to be read).
   For snippet scope, `found` is ignored.
 
+  Two more OPTIONAL fields on a session-scope answer drive the diagram
+  area at the top of the page:
+  - `"view": "explore" | "mapping"` -- your judgement call. `explore` when
+    the prompt is purely about retrieving documents; `mapping` when the
+    prompt also states goals or tasks to accomplish (then items are drawn
+    on the left and goals/tasks on the right, so Jeff can visually connect
+    documents to tasks). Omit it to leave the current view alone.
+  - `"tasks": [{"label": "...", "kind": "goal"|"task", "goal": "<goal label>"}, ...]`
+    -- the goals and tasks the prompt states (or clearly implies), for the
+    mapping view. `goal` entries are the big aims; `task` entries are the
+    concrete steps, each naming the goal label it belongs under ("" if
+    none). Short labels (a few words). The list REPLACES the saved one;
+    omit the field to leave it alone. Send it whenever you send
+    `"view": "mapping"`.
+
+  Example (mapping):
+
+      {"id": "<id>", "kind": "answer", "response": "...",
+       "found": ["mail:nz:619"],
+       "view": "mapping",
+       "tasks": [{"label": "get listed as a house sitter", "kind": "goal"},
+                 {"label": "send 2 character references", "kind": "task",
+                  "goal": "get listed as a house sitter"},
+                 {"label": "book the Zoom call", "kind": "task",
+                  "goal": "get listed as a house sitter"}]}
+
   Kind rules:
   - `answer` — the normal case; text replaces the user's box.
   - `error` — you tried and failed (file unreadable, request malformed,
@@ -178,5 +204,6 @@ your terminal and wait — do not touch queue files as a fallback.
 v1 — server, landing page + saved dossiers, 2-column UI, queue, and
 per-dossier session logging exist. The left column is driven by YOUR
 `found` list on the top-box answer (the v0 recency stand-in is now only a
-config toggle).
+config toggle). The diagram area has two views, explore and mapping; you
+pick the initial one with `view` and feed the mapping view with `tasks`.
 This skill is a living document; update it as pieces are built.

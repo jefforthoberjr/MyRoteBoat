@@ -56,12 +56,13 @@ def _mtime_of(path):
     return path.stat().st_mtime
 
 
-def load_snippet(path):
-    """Read one stash file into a snippet dict (see module docstring)."""
+def load_snippet(path, full=False):
+    """Read one stash file into a snippet dict (see module docstring).
+    full=True skips the max_chars truncation (the "load whole file" button)."""
     max_chars = CONFIG["snippets"]["max_chars"]
     text = path.read_text(errors="replace")
     truncated = False
-    if len(text) > max_chars:
+    if not full and len(text) > max_chars:
         text = text[:max_chars]
         truncated = True
     snippet = rule_snippet_provenance(path)
@@ -94,13 +95,13 @@ def ref_exists(ref):
     return result
 
 
-def load_item(ref):
+def load_item(ref, full=False):
     """Load any item ref into a snippet dict: mail refs via mail.py,
-    everything else as a stash file."""
+    everything else as a stash file. full=True skips truncation."""
     if mail.parse_ref(ref) is not None:
-        snippet = mail.load_mail_snippet(ref)
+        snippet = mail.load_mail_snippet(ref, full)
     else:
-        snippet = load_snippet(resolve_stash_path(ref))
+        snippet = load_snippet(resolve_stash_path(ref), full)
     return snippet
 
 

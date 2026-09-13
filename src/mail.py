@@ -98,9 +98,10 @@ def ref_exists(ref):
 
 # --- loading -----------------------------------------------------------------
 
-def load_mail_snippet(ref):
+def load_mail_snippet(ref, full=False):
     """Read one email into a snippet dict (same contract as a file snippet:
-    kind, ref, account, folder, name, content, truncated)."""
+    kind, ref, account, folder, name, content, truncated). full=True skips
+    the max_chars truncation."""
     account, idx = parse_ref(ref)
     start, end, date, sender, subject, labels = _index_for(account)[idx]
     mbox_path, _index_path = _account_paths(account)
@@ -112,7 +113,7 @@ def load_mail_snippet(ref):
     content = rule_mail_content(message, rule_mail_body(message))
     max_chars = CONFIG["snippets"]["max_chars"]
     truncated = False
-    if len(content) > max_chars:
+    if not full and len(content) > max_chars:
         content = content[:max_chars]
         truncated = True
     snippet = {
@@ -123,6 +124,12 @@ def load_mail_snippet(ref):
         "name": subject,
         "content": content,
         "truncated": truncated,
+        # Threading fields, used by diagram.py to draw chain arrows.
+        "date": date,
+        "sender": sender,
+        "message_id": (message.get("Message-ID") or "").strip(),
+        "in_reply_to": (message.get("In-Reply-To") or "").strip(),
+        "references": (message.get("References") or "").split(),
     }
     return snippet
 

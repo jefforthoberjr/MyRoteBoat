@@ -18,6 +18,10 @@ Log codes (append-only, never reuse a number):
     10004  dossier created
     10005  dossier loaded
     10006  dossier item removed (X clicked)
+    10007  full item loaded (truncation skipped on request)
+    10008  diagram source built (nodes/edges counts)
+    10009  diagram refreshed (button or after an item removal)
+    40001  browser ui event (posted by the page: diagram node clicked, ...)
     10002  snippet refreshed (left column re-read from disk)
     20001  process clicked (request received from browser)
     20002  request file written to queue

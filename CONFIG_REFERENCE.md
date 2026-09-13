@@ -98,6 +98,26 @@ work/text/ — a stand-in until chat-driven retrieval exists.
 Snippet content longer than this is truncated for display (a "truncated" note
 appears under the card). The full file always remains untouched on disk.
 
+## diagram.direction
+Layout direction of the item diagram (Mermaid flowchart) drawn between the
+dossier prompt and the two columns. Counter-intuitively, `TB` (top-to-
+bottom) lays UNCONNECTED items out as one horizontal row, with reply chains
+hanging down from their first mail -- compact in the 40vh box. `LR` stacks
+unconnected items into a tall column instead. Mermaid also accepts RL/BT.
+
+## diagram.label_chars
+Each diagram node shows the item's account and name; the name is cut at
+this many characters so a long Drive path doesn't blow the box wide.
+
+## diagram.chain
+Which rule draws arrows between mail items in the diagram (file items never
+get arrows). `headers`: real reply threading -- a mail's In-Reply-To, then
+its References newest-first, is matched against the displayed mails and the
+first hit becomes the parent, so a reply to a mail that is not in the
+dossier still links to its nearest displayed ancestor. `sender`: every
+sender's mails are chained in date order, which turns an automated drip
+campaign (no reply headers) into a visible sequence. `none`: boxes only.
+
 ## ui.title
 Browser tab / page heading title.
 

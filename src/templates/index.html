@@ -52,6 +52,35 @@
     background: #fff;
   }
   .session-prompt .chat-label { background: #e7e4da; }
+  /* Item diagram: mermaid flowchart of the left-column items, between the
+     dossier prompt and the columns. Scrolls sideways if it gets wide. */
+  .diagram {
+    margin: 0 1rem 1rem 1rem;
+    border: 1px solid #bbb;
+    background: #fff;
+    /* .rows is a fixed-height column flexbox; a scrolling child has
+       min-height 0 there and gets squeezed flat. Never shrink it, cap it
+       at a slice of the viewport, and let it scroll inside instead. */
+    flex-shrink: 0;
+    max-height: 40vh;
+    overflow: auto;
+  }
+  .diagram .chat-label { background: #e7e4da; }
+  .diagram .chat-label button {
+    float: right;
+    font-family: Georgia, serif;
+    font-size: 0.75rem;
+    padding: 0 0.6rem;
+    cursor: pointer;
+  }
+  .diagram .empty-note { padding: 0.6rem; color: #999; font-style: italic; }
+  .diagram pre.mermaid {
+    margin: 0;
+    padding: 0.6rem;
+    font-family: Menlo, monospace;
+    font-size: 0.8rem;
+  }
+  .diagram .node { cursor: pointer; }
   .rows-tail {
     display: flex;
     min-height: 2rem;
@@ -106,6 +135,15 @@
     color: #999;
     border-top: 1px dashed #ddd;
   }
+  .truncated-note button {
+    float: right;
+    font-family: Georgia, serif;
+    font-size: 0.75rem;
+    padding: 0 0.6rem;
+    cursor: pointer;
+  }
+  /* A fully loaded item gets a taller scroll box than the default. */
+  .snippet-content.full { max-height: 60vh; }
   /* Chat card: one per snippet, same order as the left column. */
   .chat {
     border: 1px solid #ccc;
@@ -231,8 +269,21 @@
         <button onclick="processSession()">process</button>
       </div>
     </div>
+    <div class="diagram" id="diagram">
+      <div class="chat-label">
+        <button onclick="refreshDiagram()">refresh diagram</button>
+        items &mdash; click a box to jump to it
+      </div>
+      <div id="diagram-body">
+        {% if snippets %}
+        <pre class="mermaid">{{ diagram_source }}</pre>
+        {% else %}
+        <div class="empty-note">no items</div>
+        {% endif %}
+      </div>
+    </div>
     {% for snippet in snippets %}
-    <div class="row" id="row-{{ loop.index0 }}">
+    <div class="row" id="row-{{ loop.index0 }}" data-ref="{{ snippet.ref }}">
       <div class="cell cell-left">
         <div class="snippet">
           <div class="snippet-provenance">
@@ -245,7 +296,10 @@
           </div>
           <pre class="snippet-content" id="snippet-content-{{ loop.index0 }}">{{ snippet.content }}</pre>
           {% if snippet.truncated %}
-          <div class="truncated-note">&hellip; truncated at {{ snippet.content | length }} chars; full file on disk</div>
+          <div class="truncated-note" id="truncated-note-{{ loop.index0 }}">
+            <button onclick="loadFull({{ loop.index0 }})">load whole file</button>
+            &hellip; truncated at {{ snippet.content | length }} chars
+          </div>
           {% endif %}
         </div>
       </div>
@@ -278,6 +332,7 @@
     </div>
   </div>
 
+<script src="/static/mermaid.min.js"></script>
 <script>
   const POLL_MS = {{ poll_ms }};
   const DOSSIER_ID = document.querySelector(".rows").dataset.dossierId;
@@ -382,6 +437,41 @@
   }
   heartbeat();
 
+  // Item diagram. securityLevel loose lets mermaid's "click ... call"
+  // reach diagramClick below. Node index -> item ref via DIAGRAM_REFS, so
+  // a refreshed diagram (renumbered nodes) still finds the right row.
+  let DIAGRAM_REFS = {{ diagram_refs | tojson }};
+  mermaid.initialize({ startOnLoad: true, securityLevel: "loose",
+                       theme: "neutral" });
+  function diagramClick(idx) {
+    const ref = DIAGRAM_REFS[idx];
+    const row = document.querySelector('.row[data-ref="' + CSS.escape(ref) + '"]');
+    if (row) { row.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    fetch("/ui-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "diagram node clicked", fields: "ref=" + ref }),
+    });
+  }
+
+  function refreshDiagram() {
+    // Re-render from the dossier as saved now (after removals / answers).
+    const body = document.getElementById("diagram-body");
+    fetch("/dossier/" + DOSSIER_ID + "/diagram")
+      .then((r) => r.json())
+      .then((data) => {
+        DIAGRAM_REFS = data.refs;
+        if (data.refs.length === 0) {
+          body.innerHTML = '<div class="empty-note">no items</div>';
+        } else {
+          mermaid.render("diagram-svg", data.source).then(function (out) {
+            body.innerHTML = out.svg;
+            if (out.bindFunctions) { out.bindFunctions(body); }
+          });
+        }
+      });
+  }
+
   function removeItem(idx) {
     // No confirm dialog (zero popups): the X is small and the item can be
     // found again by re-processing the dossier prompt.
@@ -393,7 +483,23 @@
     })
       .then((r) => r.json())
       .then((data) => {
-        if (data.ok) { document.getElementById("row-" + idx).remove(); }
+        if (data.ok) {
+          document.getElementById("row-" + idx).remove();
+          refreshDiagram();
+        }
+      });
+  }
+
+  function loadFull(idx) {
+    // Swap the truncated text for the whole item; the note goes away.
+    const chat = document.getElementById("chat-" + idx);
+    fetch("/snippet?ref=" + encodeURIComponent(chat.dataset.ref) + "&full=1")
+      .then((r) => r.json())
+      .then((snippet) => {
+        const pre = document.getElementById("snippet-content-" + idx);
+        pre.textContent = snippet.content;
+        pre.classList.add("full");
+        document.getElementById("truncated-note-" + idx).remove();
       });
   }
 

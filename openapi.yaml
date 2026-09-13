@@ -62,6 +62,22 @@ paths:
       responses:
         '200':
           description: '{"ok": true}'
+  /dossier/{dossier_id}/diagram:
+    get:
+      tags:
+      - ui
+      summary: Current Mermaid source for a dossier's items, plus the ref per node.
+      parameters:
+      - in: path
+        name: dossier_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: '{"source": "<mermaid text>", "refs": [ref per node index]}'
+        '404':
+          description: No such dossier.
   /dossier/{dossier_id}:
     get:
       tags:
@@ -179,8 +195,33 @@ paths:
         schema:
           type: string
           description: stash-relative path or mail:<acct>:<idx>
+      - in: query
+        name: full
+        required: false
+        schema:
+          type: string
+          description: pass 1 to skip snippets.max_chars truncation
       responses:
         '200':
           description: Snippet dict (kind, ref, content, truncated, account, folder,
             name).
+  /ui-event:
+    post:
+      tags:
+      - ui
+      summary: Log a browser UI event into the session log (code 40001).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                event:
+                  type: string
+                  description: short event name
+                fields:
+                  type: string
+                  description: k=v pairs for the log line
+      responses:
+        '200':
+          description: '{"ok": true}'
 openapi: 3.0.3

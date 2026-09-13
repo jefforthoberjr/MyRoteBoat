@@ -7,6 +7,7 @@ Routes are registered via app.add_url_rule (no decorators, per TECH.md)."""
 from flask import Flask, jsonify, redirect, render_template, request
 
 import agent_queue
+import diagram
 import dossier as dossier_store
 import session_log
 from config import CONFIG, stash_dir
@@ -132,12 +133,21 @@ def handle_dossier(dossier_id):
                          "id=" + dossier_id + " items="
                          + str(len(dossier["items"]))
                          + " snippets=" + str(len(snippets)))
+        diagram_source = diagram.rule_diagram_source(snippets)
+        session_log.emit("10008", "diagram source built",
+                         "nodes=" + str(len(snippets)) + " edges="
+                         + str(len(diagram.rule_diagram_edges(snippets))))
+        diagram_refs = []
+        for snippet in snippets:
+            diagram_refs.append(snippet["ref"])
         page = render_template(
             "index.html",
             title=CONFIG["ui"]["title"],
             stash=rule_stash_status(),
             dossier=dossier,
             snippets=snippets,
+            diagram_source=diagram_source,
+            diagram_refs=diagram_refs,
             poll_ms=CONFIG["agent"]["poll_ms"],
             heartbeat_ms=CONFIG["ui_heartbeat"]["interval_ms"],
         )
@@ -186,6 +196,41 @@ def handle_process():
     request_id = agent_queue.write_request(dossier_id, snippet, prompt)
     session_log.emit("20002", "request file written", "id=" + request_id)
     return jsonify({"request_id": request_id})
+
+
+def handle_diagram(dossier_id):
+    """Rebuild the item diagram text from the dossier as saved now (the
+    "refresh diagram" button, and after an item removal).
+    ---
+    get:
+      tags: [ui]
+      summary: Current Mermaid source for a dossier's items, plus the ref per node.
+      parameters:
+        - in: path
+          name: dossier_id
+          required: true
+          schema: {type: string}
+      responses:
+        200:
+          description: '{"source": "<mermaid text>", "refs": [ref per node index]}'
+        404:
+          description: No such dossier.
+    """
+    dossier = dossier_store.load_dossier(dossier_id)
+    if dossier is None:
+        result = ("no such dossier: " + dossier_id, 404)
+    else:
+        snippets = rule_page_snippets(dossier)
+        refs = []
+        for snippet in snippets:
+            refs.append(snippet["ref"])
+        session_log.emit("10009", "diagram refreshed",
+                         "dossier=" + dossier_id + " nodes=" + str(len(refs))
+                         + " edges="
+                         + str(len(diagram.rule_diagram_edges(snippets))))
+        result = jsonify({"source": diagram.rule_diagram_source(snippets),
+                          "refs": refs})
+    return result
 
 
 def handle_remove_item(dossier_id):
@@ -252,7 +297,8 @@ def handle_poll(request_id):
 
 
 def handle_snippet():
-    """Re-read one item (left-column refresh after a response).
+    """Re-read one item (left-column refresh after a response, or the
+    "load whole file" button with full=1).
     ---
     get:
       tags: [ui]
@@ -262,13 +308,22 @@ def handle_snippet():
           name: ref
           required: true
           schema: {type: string, description: stash-relative path or mail:<acct>:<idx>}
+        - in: query
+          name: full
+          required: false
+          schema: {type: string, description: pass 1 to skip snippets.max_chars truncation}
       responses:
         200:
           description: Snippet dict (kind, ref, content, truncated, account, folder, name).
     """
     ref = request.args["ref"]
-    snippet = load_item(ref)
-    session_log.emit("10002", "snippet refreshed", "ref=" + ref)
+    full = request.args.get("full") == "1"
+    snippet = load_item(ref, full)
+    if full:
+        session_log.emit("10007", "full item loaded",
+                         "ref=" + ref + " chars=" + str(len(snippet["content"])))
+    else:
+        session_log.emit("10002", "snippet refreshed", "ref=" + ref)
     return jsonify(snippet)
 
 
@@ -369,6 +424,30 @@ def handle_agent_respond():
     return jsonify(result)
 
 
+def handle_ui_event():
+    """Browser-side replay hook: the page posts UI events that never hit
+    another route (diagram node clicks, ...) so they land in the session log.
+    ---
+    post:
+      tags: [ui]
+      summary: Log a browser UI event into the session log (code 40001).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                event: {type: string, description: short event name}
+                fields: {type: string, description: k=v pairs for the log line}
+      responses:
+        200:
+          description: '{"ok": true}'
+    """
+    body = request.get_json()
+    session_log.emit("40001", "browser ui event",
+                     "event=" + body["event"] + " " + body.get("fields", ""))
+    return jsonify({"ok": True})
+
+
 def handle_heartbeat():
     """Frontend liveness ping; existing = healthy. Not logged (too chatty).
     ---
@@ -392,10 +471,14 @@ def create_app():
     app.add_url_rule("/dossier/<dossier_id>", "dossier", handle_dossier)
     app.add_url_rule("/dossier/<dossier_id>/remove", "remove_item",
                      handle_remove_item, methods=["POST"])
+    app.add_url_rule("/dossier/<dossier_id>/diagram", "diagram",
+                     handle_diagram)
     app.add_url_rule("/process", "process", handle_process, methods=["POST"])
     app.add_url_rule("/poll/<request_id>", "poll", handle_poll)
     app.add_url_rule("/snippet", "snippet", handle_snippet)
     app.add_url_rule("/heartbeat", "heartbeat", handle_heartbeat)
+    app.add_url_rule("/ui-event", "ui_event", handle_ui_event,
+                     methods=["POST"])
     # Agent API: localhost calls from the runtime assistant, not the browser.
     app.add_url_rule("/agent/requests", "agent_requests",
                      handle_agent_requests)

@@ -148,3 +148,7 @@ prose (if needed) goes in the relevant section above.
 - 2026-09-13: apispec + apispec-webframeworks generate openapi.yaml from
   route docstrings (tools/generate_swagger.py). UI API vs agent API split
   expressed as swagger tags.
+- 2026-09-13: Mermaid (11.4.1) for the item diagram, vendored as a pinned
+  copy at src/static/mermaid.min.js (no CDN: offline-safe, changes only
+  when we bump it). The server builds the diagram text (src/diagram.py
+  rules); the browser renders it.

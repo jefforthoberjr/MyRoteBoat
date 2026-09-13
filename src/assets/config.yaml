@@ -9,16 +9,38 @@ server:
 data:
   stash_dir: "~/Downloads/all-my-google-files"   # read-only local file stash
 
+mail:                      # per-account Takeout mbox + the stash's own index tsv (stash-relative)
+  nz:
+    mbox: "extracted/nz/Takeout/Mail/All mail Including Spam and Trash.mbox"
+    index: "work/nz_mail_index.tsv"
+  usa:
+    mbox: "extracted/usa/Takeout/Mail/All mail Including Spam and Trash.mbox"
+    index: "work/usa_mail_index.tsv"
+
 agent:
   queue_dir: "queue"       # request/response file queue root (repo-relative)
   poll_ms: 1000            # browser poll interval while a request is pending
+  status_chars: 25         # max chars of agent status text shown by a spinner
+  stall_seconds: 30        # no agent activity for this long -> UI shows "see CLI" hint
+
+ui_heartbeat:
+  interval_ms: 2000        # browser pings /heartbeat this often; dot goes red on failure
 
 logging:
   enabled: true            # session logs under sessions/
 
+dossiers:
+  dir: "dossiers"          # saved dossiers root (repo-relative): <id>/dossier.json + session.log
+  title_chars: 60          # landing-list title = prompt's first line cut here
+  found_merge: "replace"   # session answer's found list replaces the items (keeps surviving chats)
+  # found_merge: "append"  # keep existing items, add newly found ones after
+
 snippets:
-  count: 5                 # how many snippets the left column shows
+  source: "dossier"        # left column comes from the dossier's saved items
+  # source: "recent"       # v0 stand-in: N most recent work/text files (ignores the dossier)
+  count: 5                 # how many snippets the left column shows (source=recent only)
   max_chars: 2000          # truncate snippet content beyond this
 
 ui:
   title: "MyRoteBoat"      # page/tab title
+  initial_prompt: "Find all my documentation and notes related to pet setting, including images I've been stashing for it."   # session kickoff prompt shown in the top box

@@ -17,6 +17,13 @@
     border-bottom: 1px solid #ccc;
     font-size: 1.1rem;
   }
+  header .home {
+    margin-right: 1rem;
+    color: #777;
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+  header .dossier-title { color: #555; font-style: italic; }
   header .stash-note {
     float: right;
     font-size: 0.8rem;
@@ -37,6 +44,14 @@
     padding: 1rem 1rem 0 1rem;
   }
   .cell-left { border-right: 1px solid #ccc; }
+  /* Session prompt: first thing in the scroll flow (NOT sticky -- it
+     scrolls off-screen like everything else), spanning both columns. */
+  .session-prompt {
+    margin: 1rem;
+    border: 1px solid #bbb;
+    background: #fff;
+  }
+  .session-prompt .chat-label { background: #e7e4da; }
   .rows-tail {
     display: flex;
     min-height: 2rem;
@@ -73,6 +88,7 @@
   }
   .snippet-provenance .name { font-weight: bold; color: #222; }
   .snippet-provenance .disk-path { color: #999; }
+  .snippet-provenance .kind-mail { background: #e3ecf5; }
   .snippet-content {
     margin: 0;
     padding: 0.6rem;
@@ -140,11 +156,41 @@
   }
   .chat.pending .spinner { display: inline-block; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* Agent status: tiny live note beside the spinner (scan vs. stall). */
+  .status-text {
+    display: none;
+    margin-right: 0.6rem;
+    font-size: 0.75rem;
+    font-style: italic;
+    color: #999;
+    vertical-align: middle;
+  }
+  .chat.pending .status-text { display: inline; }
+  .status-text.stalled {
+    color: #b7791f;
+    font-style: normal;
+    font-weight: bold;
+  }
+  /* A non-answer response (error / needs_human) tints the box until the
+     user clicks back into it. Tint only -- no popups, per core values. */
+  .chat textarea.attention { background: #fbf0ee; }
+  /* Server heartbeat dot, top right. Green = pings ok, red = server gone. */
+  .heartbeat {
+    float: right;
+    width: 0.7rem;
+    height: 0.7rem;
+    margin: 0.35rem 0 0 0.8rem;
+    border-radius: 50%;
+    background: #4a4;
+  }
+  .heartbeat.dead { background: #c33; }
 </style>
 </head>
 <body>
   <header>
-    {{ title }}
+    <a class="home" href="/">&larr; dossiers</a>
+    {{ title }} &mdash; <span class="dossier-title">{{ dossier.title }}</span>
+    <span class="heartbeat" id="heartbeat" title="server heartbeat"></span>
     <span class="stash-note">
       stash: {{ stash.path }} &mdash;
       {% if stash.exists %}
@@ -155,17 +201,27 @@
     </span>
   </header>
 
-  <div class="rows">
+  <div class="rows" data-dossier-id="{{ dossier.id }}">
+    <div class="chat session-prompt" id="chat-session">
+      <div class="chat-label">dossier prompt &mdash; scoped to the <b>whole dossier</b></div>
+      {# Saved answer wins over the prompt, same as after a live process. #}
+      <textarea>{{ dossier.prompt_response or dossier.prompt }}</textarea>
+      <div class="chat-actions">
+        <span class="status-text"></span>
+        <span class="spinner"></span>
+        <button onclick="processSession()">process</button>
+      </div>
+    </div>
     {% for snippet in snippets %}
     <div class="row">
       <div class="cell cell-left">
         <div class="snippet">
           <div class="snippet-provenance">
-            <span class="account">{{ snippet.account }}</span>
+            <span class="account kind-{{ snippet.kind }}">{{ snippet.account }}{% if snippet.kind == "mail" %} mail{% endif %}</span>
             <span class="name">{{ snippet.name }}</span>
             {% if snippet.folder %} &mdash; {{ snippet.folder }}{% endif %}
             <br>
-            <span class="disk-path">{{ snippet.disk_path }}</span>
+            <span class="disk-path">{{ snippet.ref }}</span>
           </div>
           <pre class="snippet-content" id="snippet-content-{{ loop.index0 }}">{{ snippet.content }}</pre>
           {% if snippet.truncated %}
@@ -174,11 +230,12 @@
         </div>
       </div>
       <div class="cell cell-right">
-        <div class="chat" id="chat-{{ loop.index0 }}" data-disk-path="{{ snippet.disk_path }}">
+        <div class="chat" id="chat-{{ loop.index0 }}" data-ref="{{ snippet.ref }}">
           <div class="chat-label">re: <b>{{ snippet.name }}</b></div>
-          <textarea placeholder="Ask about this snippet&hellip;"></textarea>
+          <textarea placeholder="Ask about this snippet&hellip;">{{ snippet.chat_response }}</textarea>
           <div class="chat-actions">
-            <span class="spinner"></span>
+            <span class="status-text"></span>
+          <span class="spinner"></span>
             <button onclick="processChat({{ loop.index0 }})">process</button>
           </div>
         </div>
@@ -187,7 +244,7 @@
     {% else %}
     <div class="row">
       <div class="cell cell-left">
-        <div class="placeholder">Retrieved snippets will appear here.</div>
+        <div class="placeholder">No items yet &mdash; process the dossier prompt above to find some.</div>
       </div>
       <div class="cell cell-right">
         <div class="placeholder">Per-snippet chat boxes will appear here.</div>
@@ -202,12 +259,31 @@
 
 <script>
   const POLL_MS = {{ poll_ms }};
+  const DOSSIER_ID = document.querySelector(".rows").dataset.dossierId;
 
   function processChat(idx) {
     const chat = document.getElementById("chat-" + idx);
+    fireProcess(chat, chat.dataset.ref, function (kind) {
+      refreshSnippet(idx, chat.dataset.ref);
+    });
+  }
+
+  function processSession() {
+    // Session scope: the answer's found list rewrote the dossier's items
+    // server-side, so rebuild the whole page from the saved dossier. A
+    // non-answer (error / needs_human) stays put so its tint is visible.
+    const chat = document.getElementById("chat-session");
+    fireProcess(chat, null, function (kind) {
+      if (kind === "answer") { location.reload(); }
+    });
+  }
+
+  function fireProcess(chat, ref, onDone) {
     const box = chat.querySelector("textarea");
     const button = chat.querySelector("button");
-    const body = { disk_path: chat.dataset.diskPath, prompt: box.value };
+    const body = { dossier_id: DOSSIER_ID, ref: ref, prompt: box.value };
+    chat.dataset.lastPrompt = box.value;  // preserved if the reply is an error
+    box.classList.remove("attention");
     chat.classList.add("pending");
     box.disabled = true;
     button.disabled = true;
@@ -217,33 +293,67 @@
       body: JSON.stringify(body),
     })
       .then((r) => r.json())
-      .then((data) => pollForResponse(idx, data.request_id));
+      .then((data) => pollForResponse(chat, data.request_id, onDone));
   }
 
-  function pollForResponse(idx, requestId) {
+  function pollForResponse(chat, requestId, onDone) {
     fetch("/poll/" + requestId)
       .then((r) => r.json())
       .then((data) => {
         if (data.done) {
-          deliverResponse(idx, data.response);
+          const box = chat.querySelector("textarea");
+          if (data.kind === "answer") {
+            box.value = data.response;   // replaces the user's prompt, by design
+          } else {
+            // error / needs_human: surface it, but keep the prompt so the
+            // user can fix things in the CLI and re-process.
+            box.value = "[" + data.kind.toUpperCase() + "] " + data.response
+              + "\n\n--- your prompt, unchanged: ---\n"
+              + chat.dataset.lastPrompt;
+            box.classList.add("attention");
+          }
+          box.disabled = false;
+          chat.querySelector("button").disabled = false;
+          chat.classList.remove("pending");
+          const st = chat.querySelector(".status-text");
+          st.textContent = "";
+          st.classList.remove("stalled");
+          onDone(data.kind);
         } else {
-          setTimeout(() => pollForResponse(idx, requestId), POLL_MS);
+          const st = chat.querySelector(".status-text");
+          if (data.stalled) {
+            st.textContent = "input needed? see CLI";
+            st.classList.add("stalled");
+          } else {
+            st.classList.remove("stalled");
+            if (data.status !== null) { st.textContent = data.status; }
+          }
+          setTimeout(() => pollForResponse(chat, requestId, onDone), POLL_MS);
         }
+      })
+      .catch(() => {
+        // Server unreachable mid-request: keep trying; the heartbeat dot
+        // is what tells the user the server is down.
+        setTimeout(() => pollForResponse(chat, requestId, onDone), POLL_MS);
       });
   }
 
-  function deliverResponse(idx, responseText) {
-    const chat = document.getElementById("chat-" + idx);
-    const box = chat.querySelector("textarea");
-    box.value = responseText;   // replaces the user's prompt, by design
-    box.disabled = false;
-    chat.querySelector("button").disabled = false;
-    chat.classList.remove("pending");
-    refreshSnippet(idx, chat.dataset.diskPath);
-  }
+  const HEARTBEAT_MS = {{ heartbeat_ms }};
 
-  function refreshSnippet(idx, diskPath) {
-    fetch("/snippet?path=" + encodeURIComponent(diskPath))
+  function heartbeat() {
+    const dot = document.getElementById("heartbeat");
+    fetch("/heartbeat")
+      .then((r) => {
+        if (r.ok) { dot.classList.remove("dead"); }
+        else { dot.classList.add("dead"); }
+      })
+      .catch(() => dot.classList.add("dead"))
+      .finally(() => setTimeout(heartbeat, HEARTBEAT_MS));
+  }
+  heartbeat();
+
+  function refreshSnippet(idx, ref) {
+    fetch("/snippet?ref=" + encodeURIComponent(ref))
       .then((r) => r.json())
       .then((snippet) => {
         const pre = document.getElementById("snippet-content-" + idx);

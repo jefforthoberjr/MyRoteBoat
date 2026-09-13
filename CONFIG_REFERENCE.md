@@ -22,6 +22,15 @@ drive). `~` is expanded at load time. The app must NEVER write into, move, or
 delete anything under this directory. Future: swap for live gmail/drive
 connectors.
 
+## mail.<account>.mbox / mail.<account>.index
+One entry per mail account. `mbox` is the Google Takeout mailbox export
+(stash-relative); `index` is the tab-separated index the stash's own
+index_mbox.py built from it (idx, byte_start, byte_end, date, from, to, cc,
+subject, labels). An email item is addressed as `mail:<account>:<idx>`; the
+server seeks to the row's byte range and parses just that one message, so
+the multi-hundred-MB mbox is never read whole. Adding an account = adding
+an entry here (plus running index_mbox.py in the stash).
+
 ## agent.queue_dir
 Root (repo-relative) of the file queue between the web server and the
 Claude-session agent: requests/ and responses/ subdirs, one json file per
@@ -31,9 +40,54 @@ request. Format documented in src/agent_queue.py and SKILL.md. Gitignored.
 How often (ms) the browser polls /poll/<id> while a process request is
 pending. 1000 is plenty; the agent takes seconds-to-minutes anyway.
 
+## agent.status_chars
+Max characters of agent status text displayed beside a pending spinner. The
+agent overwrites queue/status/<id>.txt with a short note as it works
+("scanning stash 120/900"); the server truncates to this length. Keeps the
+user informed that a long scan is genuinely progressing vs. stalled.
+
+## agent.stall_seconds
+A pending request whose status file (or request file, if no status yet) has
+not been touched for this many seconds is flagged stalled: the UI swaps the
+status text for an amber "input needed? see CLI" hint. Covers the cases the
+agent CANNOT report itself — waiting on a CLI permission prompt, agent
+crashed, or no agent session running at all. Clears itself if activity
+resumes. Tune upward if legitimate long single steps trip it.
+
+## ui_heartbeat.interval_ms
+How often (ms) the browser pings GET /heartbeat. The dot in the top-right
+header shows green while pings succeed, red once one fails (server killed,
+crashed, etc.). Purely frontend-to-server liveness — says nothing about the
+agent session.
+
 ## logging.enabled
 Master toggle for session logs (sessions/<timestamp>_<seed>.log). Codes and
 line format documented in src/session_log.py.
+
+## dossiers.dir
+Root (repo-relative) of saved dossiers. Each dossier is a folder named by
+its id (timestamp + seed) holding dossier.json (state: prompt, answers,
+found items -- shape in src/dossier.py) and session.log (that dossier's own
+debug/replay log, appended every time it is loaded). Gitignored.
+
+## dossiers.title_chars
+The landing page labels each dossier with the first line of its kickoff
+prompt, cut to this many characters.
+
+## dossiers.found_merge
+What happens to a dossier's items when the agent answers the top (session
+scope) prompt with a `found` list. `replace`: the agent's list becomes the
+items, in the agent's order; a path that was already an item keeps its saved
+chat_response, everything else is dropped. Good for "refine the search"
+re-processing. `append`: existing items stay, unseen paths are added after
+them -- nothing found is ever lost, at the cost of a growing column.
+
+## snippets.source
+Where the left column's items come from when a dossier page renders.
+`dossier`: the dossier's saved items list (empty for a brand new dossier
+until the agent answers the kickoff prompt). `recent`: the v0 stand-in rule,
+the N most recently modified work/text files regardless of dossier -- kept
+as a toggle for testing the layout without an agent running.
 
 ## snippets.count
 How many snippets the left column shows. The current pick rule
@@ -46,3 +100,8 @@ appears under the card). The full file always remains untouched on disk.
 
 ## ui.title
 Browser tab / page heading title.
+
+## ui.initial_prompt
+The session-kickoff prompt pre-filled into the top box (above both columns).
+Currently a hardcoded example; later this becomes whatever the user actually
+typed to start the session (and this knob becomes just a dev default).

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+<style>
+  /* Landing: same calm palette as the dossier page; one column, no popups. */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Georgia, serif;
+    background: #f7f6f2;
+    color: #222;
+  }
+  header {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid #ccc;
+    font-size: 1.1rem;
+  }
+  header .stash-note { float: right; font-size: 0.8rem; color: #777; }
+  main { max-width: 60rem; margin: 0 auto; padding: 1rem; }
+  h2 { font-size: 1rem; font-weight: normal; color: #555; margin: 1.5rem 0 0.5rem; }
+  /* New dossier: the kickoff prompt box, styled like a chat card. */
+  .new-dossier { border: 1px solid #bbb; background: #fff; }
+  .new-dossier textarea {
+    display: block;
+    width: 100%;
+    border: none;
+    resize: vertical;
+    min-height: 5rem;
+    padding: 0.6rem;
+    font-family: Georgia, serif;
+    font-size: 0.9rem;
+  }
+  .new-dossier .actions {
+    padding: 0.3rem 0.6rem;
+    border-top: 1px solid #ddd;
+    text-align: right;
+  }
+  .new-dossier button {
+    font-family: Georgia, serif;
+    font-size: 0.85rem;
+    padding: 0.2rem 0.9rem;
+    cursor: pointer;
+  }
+  /* Dossier list: stable order (newest first), one plain row each. */
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ccc; }
+  td { padding: 0.4rem 0.6rem; border-top: 1px solid #eee; font-size: 0.9rem; }
+  td.created { color: #777; white-space: nowrap; width: 1%; }
+  td.count { color: #999; white-space: nowrap; width: 1%; text-align: right; }
+  td a { color: #222; text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  .empty { color: #999; font-style: italic; padding: 0.6rem; }
+  .heartbeat {
+    float: right;
+    width: 0.7rem;
+    height: 0.7rem;
+    margin: 0.35rem 0 0 0.8rem;
+    border-radius: 50%;
+    background: #4a4;
+  }
+  .heartbeat.dead { background: #c33; }
+</style>
+</head>
+<body>
+  <header>
+    {{ title }}
+    <span class="heartbeat" id="heartbeat" title="server heartbeat"></span>
+    <span class="stash-note">
+      stash: {{ stash.path }} &mdash;
+      {% if stash.exists %}
+        {{ stash.entry_count }} top-level entries
+      {% else %}
+        NOT FOUND
+      {% endif %}
+    </span>
+  </header>
+
+  <main>
+    <h2>new dossier</h2>
+    <form class="new-dossier" method="post" action="/dossier/new">
+      <textarea name="prompt">{{ initial_prompt }}</textarea>
+      <div class="actions"><button type="submit">new dossier</button></div>
+    </form>
+
+    <h2>saved dossiers</h2>
+    <table>
+      {% for d in dossiers %}
+      <tr>
+        <td class="created">{{ d.created }}</td>
+        <td><a href="/dossier/{{ d.id }}">{{ d.title }}</a></td>
+        <td class="count">{{ d.item_count }} items</td>
+      </tr>
+      {% else %}
+      <tr><td class="empty">none yet</td></tr>
+      {% endfor %}
+    </table>
+  </main>
+
+<script>
+  const HEARTBEAT_MS = {{ heartbeat_ms }};
+  function heartbeat() {
+    const dot = document.getElementById("heartbeat");
+    fetch("/heartbeat")
+      .then((r) => {
+        if (r.ok) { dot.classList.remove("dead"); }
+        else { dot.classList.add("dead"); }
+      })
+      .catch(() => dot.classList.add("dead"))
+      .finally(() => setTimeout(heartbeat, HEARTBEAT_MS));
+  }
+  heartbeat();
+</script>
+</body>
+</html>

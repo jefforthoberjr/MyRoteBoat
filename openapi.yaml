@@ -1,0 +1,165 @@
+info:
+  description: 'Local single-user dossier app. Two surfaces: the ui tag is browser-facing,
+    the agent tag is the runtime assistant''s localhost API.'
+  title: MyRoteBoat
+  version: 0.1.0
+paths:
+  /agent/requests:
+    get:
+      tags:
+      - agent
+      summary: List pending request payloads, oldest first.
+      responses:
+        '200':
+          description: '{"requests": [{id, scope, prompt, snippet}, ...]}'
+  /agent/respond:
+    post:
+      tags:
+      - agent
+      summary: Complete a request (write response, archive, save to dossier).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                id:
+                  type: string
+                kind:
+                  type: string
+                  enum:
+                  - answer
+                  - error
+                  - needs_human
+                response:
+                  type: string
+                  description: plain text for the UI
+                found:
+                  type: array
+                  items:
+                    type: string
+                  description: session scope only -- item refs found (stash-relative
+                    file path, or mail:<acct>:<idx> from the mail index); they become
+                    the dossier's items (left column). Refs that do not resolve are
+                    dropped.
+      responses:
+        '200':
+          description: '{"ok": true, "dropped": [...]} or {"ok": false, "error": "..."}'
+  /agent/status:
+    post:
+      tags:
+      - agent
+      summary: Update the status line shown beside the request's spinner.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                id:
+                  type: string
+                status:
+                  type: string
+                  description: short present-tense note
+      responses:
+        '200':
+          description: '{"ok": true}'
+  /dossier/{dossier_id}:
+    get:
+      tags:
+      - ui
+      summary: Render the 2-column dossier page (HTML) for one saved dossier.
+      parameters:
+      - in: path
+        name: dossier_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: HTML page.
+        '404':
+          description: No such dossier.
+  /heartbeat:
+    get:
+      tags:
+      - ui
+      summary: Liveness ping for the header heartbeat dot.
+      responses:
+        '200':
+          description: '{"ok": true}'
+  /:
+    get:
+      tags:
+      - ui
+      summary: Render the landing page (dossier list + new-dossier form).
+      responses:
+        '200':
+          description: HTML page.
+  /dossier/new:
+    post:
+      tags:
+      - ui
+      summary: Create a new dossier from a kickoff prompt; redirects to it.
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              properties:
+                prompt:
+                  type: string
+      responses:
+        '302':
+          description: Redirect to /dossier/<id>.
+  /poll/{request_id}:
+    get:
+      tags:
+      - ui
+      summary: Poll one request for completion, status text, and stall flag.
+      parameters:
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 'Pending: {done: false, status, stalled}. Done: {done: true,
+            kind, response}.'
+  /process:
+    post:
+      tags:
+      - ui
+      summary: Queue a process request (snippet- or session-scoped).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                dossier_id:
+                  type: string
+                ref:
+                  type: string
+                  nullable: true
+                  description: item ref (stash-relative path or mail:<acct>:<idx>)
+                  null for session scope: null
+                prompt:
+                  type: string
+      responses:
+        '200':
+          description: '{"request_id": "..."}'
+  /snippet:
+    get:
+      tags:
+      - ui
+      summary: Reload one item (verbatim content + provenance) by ref.
+      parameters:
+      - in: query
+        name: ref
+        required: true
+        schema:
+          type: string
+          description: stash-relative path or mail:<acct>:<idx>
+      responses:
+        '200':
+          description: Snippet dict (kind, ref, content, truncated, account, folder,
+            name).
+openapi: 3.0.3

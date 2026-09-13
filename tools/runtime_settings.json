@@ -1,0 +1,40 @@
+{
+  "//": "Per-session settings for the RUNTIME assistant only. Launch with: claude --settings tools/runtime_settings.json '/roteboat'. Dev sessions use the repo defaults instead. The runtime agent writes NO files: all queue interaction goes through the localhost agent API (see openapi.yaml), so Write/Edit are denied outright. curl is allowed broadly because permission rules are prefix-matched and flags precede the URL; the skill restricts it to 127.0.0.1. The env block silences the harness's file-changed-on-disk notices (the dev session edits code while this one runs; the notices read like this session made the edits). The Read deny rules keep this session from ever subscribing to repo code/doc files -- it needs none of them: everything it must know is inlined in its SKILL.md.",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(curl:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(sleep:*)"
+    ],
+    "deny": [
+      "Edit",
+      "Write",
+      "NotebookEdit",
+      "Bash(git:*)",
+      "Bash(rm:*)",
+      "Bash(mv:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Read(./src/**)",
+      "Read(./tools/**)",
+      "Read(./tests/**)",
+      "Read(./openapi.yaml)",
+      "Read(./agents.md)",
+      "Read(./TECH.md)",
+      "Read(./CONFIG_REFERENCE.md)",
+      "Read(./requirements.txt)",
+      "Read(./.claude/skills/roteboat-dev/**)"
+    ],
+    "additionalDirectories": [
+      "~/Downloads/all-my-google-files"
+    ]
+  },
+  "env": {
+    "CLAUDE_CODE_FILE_WATCHER_SUPPRESS_NOTIFICATIONS": "1"
+  }
+}

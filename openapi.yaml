@@ -123,7 +123,7 @@ paths:
       responses:
         '200':
           description: 'Pending: {done: false, status, stalled}. Done: {done: true,
-            kind, response}.'
+            kind, response, finished}.'
   /process:
     post:
       tags:
@@ -146,6 +146,27 @@ paths:
       responses:
         '200':
           description: '{"request_id": "..."}'
+  /dossier/{dossier_id}/remove:
+    post:
+      tags:
+      - ui
+      summary: Remove one item from a dossier by ref.
+      parameters:
+      - in: path
+        name: dossier_id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                ref:
+                  type: string
+      responses:
+        '200':
+          description: '{"ok": true, "item_count": N} or {"ok": false}'
   /snippet:
     get:
       tags:

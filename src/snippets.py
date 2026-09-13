@@ -121,5 +121,6 @@ def gather_dossier_snippets(dossier):
         if ref_exists(item["ref"]):
             snippet = load_item(item["ref"])
             snippet["chat_response"] = item.get("chat_response", "")
+            snippet["finished"] = item.get("finished", "")
             snippets.append(snippet)
     return snippets

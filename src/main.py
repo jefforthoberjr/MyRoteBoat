@@ -188,6 +188,38 @@ def handle_process():
     return jsonify({"request_id": request_id})
 
 
+def handle_remove_item(dossier_id):
+    """Browser clicked an item's X: drop it (and its chat) from the dossier.
+    ---
+    post:
+      tags: [ui]
+      summary: Remove one item from a dossier by ref.
+      parameters:
+        - in: path
+          name: dossier_id
+          required: true
+          schema: {type: string}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                ref: {type: string}
+      responses:
+        200:
+          description: '{"ok": true, "item_count": N} or {"ok": false}'
+    """
+    ref = request.get_json()["ref"]
+    count = dossier_store.remove_item(dossier_id, ref)
+    result = {"ok": False}
+    if count is not None:
+        result = {"ok": True, "item_count": count}
+        session_log.emit("10006", "dossier item removed",
+                         "dossier=" + dossier_id + " ref=" + ref
+                         + " items=" + str(count))
+    return jsonify(result)
+
+
 def handle_poll(request_id):
     """Browser polling for the agent's answer to one request.
     ---
@@ -201,7 +233,7 @@ def handle_poll(request_id):
           schema: {type: string}
       responses:
         200:
-          description: 'Pending: {done: false, status, stalled}. Done: {done: true, kind, response}.'
+          description: 'Pending: {done: false, status, stalled}. Done: {done: true, kind, response, finished}.'
     """
     payload = agent_queue.read_response(request_id)
     if payload is None:
@@ -211,7 +243,8 @@ def handle_poll(request_id):
     else:
         kind = payload.get("kind", "answer")
         result = {"done": True, "kind": kind,
-                  "response": payload["response"]}
+                  "response": payload["response"],
+                  "finished": dossier_store.rule_finished_stamp()}
         session_log.emit("20003", "response delivered",
                          "id=" + request_id + " kind=" + kind
                          + " chars=" + str(len(payload["response"])))
@@ -357,6 +390,8 @@ def create_app():
     app.add_url_rule("/dossier/new", "new_dossier", handle_new_dossier,
                      methods=["POST"])
     app.add_url_rule("/dossier/<dossier_id>", "dossier", handle_dossier)
+    app.add_url_rule("/dossier/<dossier_id>/remove", "remove_item",
+                     handle_remove_item, methods=["POST"])
     app.add_url_rule("/process", "process", handle_process, methods=["POST"])
     app.add_url_rule("/poll/<request_id>", "poll", handle_poll)
     app.add_url_rule("/snippet", "snippet", handle_snippet)

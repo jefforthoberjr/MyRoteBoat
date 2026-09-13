@@ -142,6 +142,24 @@
     padding: 0.2rem 0.9rem;
     cursor: pointer;
   }
+  .chat-actions button:disabled { color: #aaa; cursor: default; }
+  /* "finished <time>" under a box, set when its answer landed. */
+  .finished-text {
+    float: left;
+    font-size: 0.75rem;
+    color: #999;
+  }
+  /* Remove-item X: quiet until hovered; drops the item and its chat. */
+  .remove-item {
+    float: right;
+    border: none;
+    background: none;
+    color: #aaa;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 0 0.3rem;
+  }
+  .remove-item:hover { color: #c33; }
   /* Loading spinner: a quiet rotating ring, shown only while pending. */
   .spinner {
     display: none;
@@ -207,16 +225,18 @@
       {# Saved answer wins over the prompt, same as after a live process. #}
       <textarea>{{ dossier.prompt_response or dossier.prompt }}</textarea>
       <div class="chat-actions">
+        <span class="finished-text">{{ dossier.prompt_finished }}</span>
         <span class="status-text"></span>
         <span class="spinner"></span>
         <button onclick="processSession()">process</button>
       </div>
     </div>
     {% for snippet in snippets %}
-    <div class="row">
+    <div class="row" id="row-{{ loop.index0 }}">
       <div class="cell cell-left">
         <div class="snippet">
           <div class="snippet-provenance">
+            <button class="remove-item" title="remove this item from the dossier" onclick="removeItem({{ loop.index0 }})">&#x2715;</button>
             <span class="account kind-{{ snippet.kind }}">{{ snippet.account }}{% if snippet.kind == "mail" %} mail{% endif %}</span>
             <span class="name">{{ snippet.name }}</span>
             {% if snippet.folder %} &mdash; {{ snippet.folder }}{% endif %}
@@ -234,8 +254,9 @@
           <div class="chat-label">re: <b>{{ snippet.name }}</b></div>
           <textarea placeholder="Ask about this snippet&hellip;">{{ snippet.chat_response }}</textarea>
           <div class="chat-actions">
+            <span class="finished-text">{{ snippet.finished }}</span>
             <span class="status-text"></span>
-          <span class="spinner"></span>
+            <span class="spinner"></span>
             <button onclick="processChat({{ loop.index0 }})">process</button>
           </div>
         </div>
@@ -318,6 +339,7 @@
           const st = chat.querySelector(".status-text");
           st.textContent = "";
           st.classList.remove("stalled");
+          chat.querySelector(".finished-text").textContent = data.finished;
           onDone(data.kind);
         } else {
           const st = chat.querySelector(".status-text");
@@ -343,14 +365,37 @@
   function heartbeat() {
     const dot = document.getElementById("heartbeat");
     fetch("/heartbeat")
-      .then((r) => {
-        if (r.ok) { dot.classList.remove("dead"); }
-        else { dot.classList.add("dead"); }
-      })
-      .catch(() => dot.classList.add("dead"))
+      .then((r) => setServerAlive(r.ok))
+      .catch(() => setServerAlive(false))
       .finally(() => setTimeout(heartbeat, HEARTBEAT_MS));
   }
+
+  function setServerAlive(alive) {
+    // Dead server: gray out every process button (a click would just
+    // fail). Back alive: re-enable all but the ones mid-request.
+    const dot = document.getElementById("heartbeat");
+    dot.classList.toggle("dead", !alive);
+    document.querySelectorAll(".chat").forEach(function (chat) {
+      const busy = chat.classList.contains("pending");
+      chat.querySelector(".chat-actions button").disabled = !alive || busy;
+    });
+  }
   heartbeat();
+
+  function removeItem(idx) {
+    // No confirm dialog (zero popups): the X is small and the item can be
+    // found again by re-processing the dossier prompt.
+    const chat = document.getElementById("chat-" + idx);
+    fetch("/dossier/" + DOSSIER_ID + "/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref: chat.dataset.ref }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) { document.getElementById("row-" + idx).remove(); }
+      });
+  }
 
   function refreshSnippet(idx, ref) {
     fetch("/snippet?ref=" + encodeURIComponent(ref))

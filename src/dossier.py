@@ -13,7 +13,9 @@ dossier.json shape (the template's contract):
     title            short label for the landing list (prompt's first line)
     prompt           the top-box text as last submitted
     prompt_response  the agent's answer to the top box ("" until answered)
-    items            [{"ref": <stash path or mail:<acct>:<idx>>, "chat_response": ""}]
+    prompt_finished  when that answer landed ("" until answered)
+    items            [{"ref": <stash path or mail:<acct>:<idx>>,
+                       "chat_response": "", "finished": ""}]
                      (older files used "disk_path"; load_dossier migrates)
 """
 import json
@@ -47,6 +49,12 @@ def rule_dossier_title(prompt):
     return title
 
 
+def rule_finished_stamp():
+    """The "finished" text shown under a box once its answer lands: local
+    wall-clock time to the second."""
+    return "finished " + time.strftime("%Y-%m-%d %H:%M:%S")
+
+
 def rule_merge_found(items, found_paths):
     """How a session-scope answer's found list becomes the dossier's items,
     per config dossiers.found_merge. "replace": the new list IS the dossier
@@ -67,7 +75,8 @@ def rule_merge_found(items, found_paths):
             if ref in by_ref:
                 merged.append(by_ref[ref])
             else:
-                merged.append({"ref": ref, "chat_response": ""})
+                merged.append({"ref": ref, "chat_response": "",
+                               "finished": ""})
     return merged
 
 
@@ -101,6 +110,7 @@ def create_dossier(prompt):
         "title": rule_dossier_title(prompt),
         "prompt": prompt,
         "prompt_response": "",
+        "prompt_finished": "",
         "items": [],
     }
     dossier_dir(dossier["id"]).mkdir(parents=True, exist_ok=True)
@@ -170,13 +180,32 @@ def apply_response(request_payload, kind, response_text, found_paths):
     Returns the dossier dict, or None if it no longer exists."""
     dossier = load_dossier(request_payload["dossier_id"])
     if dossier is not None and kind == "answer":
+        stamp = rule_finished_stamp()
         if request_payload["scope"] == "session":
             dossier["prompt_response"] = response_text
+            dossier["prompt_finished"] = stamp
             dossier["items"] = rule_merge_found(dossier["items"], found_paths)
         else:
             target = request_payload["snippet"]["ref"]
             for item in dossier["items"]:
                 if item["ref"] == target:
                     item["chat_response"] = response_text
+                    item["finished"] = stamp
         save_dossier(dossier)
     return dossier
+
+
+def remove_item(dossier_id, ref):
+    """Drop one item (by ref) from a dossier. Returns the new item count,
+    or None if the dossier does not exist."""
+    result = None
+    dossier = load_dossier(dossier_id)
+    if dossier is not None:
+        kept = []
+        for item in dossier["items"]:
+            if item["ref"] != ref:
+                kept.append(item)
+        dossier["items"] = kept
+        save_dossier(dossier)
+        result = len(kept)
+    return result

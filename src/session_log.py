@@ -17,6 +17,7 @@ Log codes (append-only, never reuse a number):
     10003  landing page rendered
     10004  dossier created
     10005  dossier loaded
+    10006  dossier item removed (X clicked)
     10002  snippet refreshed (left column re-read from disk)
     20001  process clicked (request received from browser)
     20002  request file written to queue

@@ -19,11 +19,27 @@ def rule_diagram_source(snippets):
         node = "item" + str(index)
         lines.append(node + "[\"" + rule_node_label(snippet) + "\"]")
         lines.append("click " + node + " call diagramClick(\"" + str(index) + "\")")
-        if snippet["kind"] == "mail":
-            lines.append("class " + node + " mail")
+        if snippet["kind"] in CONFIG["diagram"]["kinds"]:
+            lines.append("class " + node + " " + snippet["kind"])
     for edge in rule_diagram_edges(snippets):
         lines.append(edge)
-    lines.append("classDef mail fill:#e3ecf5,stroke:#8aa;")
+    for line in _class_defs():
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def rule_legend_source():
+    """The legend drawn above the item diagram: one box per configured
+    kind, in config order, colored exactly like the items of that kind.
+    TB, because mermaid lays unconnected nodes out as a row in TB (and as
+    a column in LR)."""
+    lines = ["flowchart TB"]
+    for kind in CONFIG["diagram"]["kinds"]:
+        label = CONFIG["diagram"]["kinds"][kind]["label"]
+        lines.append("legend_" + kind + "[\"" + _escape_label(label) + "\"]")
+        lines.append("class legend_" + kind + " " + kind)
+    for line in _class_defs():
+        lines.append(line)
     return "\n".join(lines)
 
 
@@ -96,6 +112,16 @@ def _edges_by_sender(snippets):
 
 
 # --- helpers -----------------------------------------------------------------
+
+def _class_defs():
+    """One Mermaid classDef per configured kind (diagram.kinds colors)."""
+    lines = []
+    for kind in CONFIG["diagram"]["kinds"]:
+        colors = CONFIG["diagram"]["kinds"][kind]
+        lines.append("classDef " + kind + " fill:" + colors["fill"]
+                     + ",stroke:" + colors["stroke"] + ";")
+    return lines
+
 
 def _escape_label(text):
     """Mermaid label text sits inside ["..."]; quotes and a few markup

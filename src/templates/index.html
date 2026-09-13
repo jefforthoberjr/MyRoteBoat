@@ -74,6 +74,21 @@
     cursor: pointer;
   }
   .diagram .empty-note { padding: 0.6rem; color: #999; font-style: italic; }
+  /* Legend: a one-row mermaid diagram of the kind colors, above the items. */
+  .legend {
+    margin: 0 1rem 0.5rem 1rem;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    font-size: 0.8rem;
+    color: #555;
+  }
+  .legend pre.mermaid {
+    margin: 0 0 0 0.6rem;
+    font-family: Menlo, monospace;
+    font-size: 0.8rem;
+  }
+  .legend svg { height: 3rem; width: auto; }
   .diagram pre.mermaid {
     margin: 0;
     padding: 0.6rem;
@@ -268,6 +283,10 @@
         <span class="spinner"></span>
         <button onclick="processSession()">process</button>
       </div>
+    </div>
+    <div class="legend">
+      legend:
+      <pre class="mermaid">{{ legend_source }}</pre>
     </div>
     <div class="diagram" id="diagram">
       <div class="chat-label">

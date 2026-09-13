@@ -148,6 +148,7 @@ def handle_dossier(dossier_id):
             snippets=snippets,
             diagram_source=diagram_source,
             diagram_refs=diagram_refs,
+            legend_source=diagram.rule_legend_source(),
             poll_ms=CONFIG["agent"]["poll_ms"],
             heartbeat_ms=CONFIG["ui_heartbeat"]["interval_ms"],
         )

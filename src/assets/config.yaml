@@ -45,6 +45,9 @@ diagram:
   direction: "TB"          # mermaid flowchart direction: TB = one row of boxes, chains hang down
   # direction: "LR"        # left-to-right: unconnected boxes stack into a tall column
   label_chars: 40          # node label: item name cut here
+  kinds:                   # per item kind: legend label + box colors (used by legend and item diagram)
+    file: {label: "drive / file", fill: "#eeeeee", stroke: "#999999"}
+    mail: {label: "email", fill: "#e3ecf5", stroke: "#88aaaa"}
   chain: "headers"         # mail arrows follow In-Reply-To / References (real reply threads)
   # chain: "sender"        # mail arrows chain each sender's mails in date order (drip campaigns)
   # chain: "none"          # boxes only, no arrows

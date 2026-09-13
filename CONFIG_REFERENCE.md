@@ -109,6 +109,13 @@ unconnected items into a tall column instead. Mermaid also accepts RL/BT.
 Each diagram node shows the item's account and name; the name is cut at
 this many characters so a long Drive path doesn't blow the box wide.
 
+## diagram.kinds
+One entry per item kind (`file`, `mail`; more as new sources arrive). Each
+gives the legend label and the box fill/stroke colors. Both the legend and
+the item diagram build their Mermaid classDef lines from here, so a color
+tweak changes both in one place. An item whose kind is missing here falls
+back to Mermaid's default box.
+
 ## diagram.chain
 Which rule draws arrows between mail items in the diagram (file items never
 get arrows). `headers`: real reply threading -- a mail's In-Reply-To, then

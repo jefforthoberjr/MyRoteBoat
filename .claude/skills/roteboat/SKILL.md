@@ -99,13 +99,30 @@ file):
 
       curl -s http://127.0.0.1:8474/agent/requests
 
-  Each request: `{"id", "dossier_id", "scope", "prompt", "snippet"}`.
-  Scope `"snippet"` carries the snippet dict (`kind` file|mail, `ref`,
-  `content` possibly truncated, `truncated`, `account`, `folder`, `name`,
-  and for files `disk_path` relative to the stash root). Scope `"session"` is the TOP box — snippet is null, the
-  prompt concerns the whole dossier, and your answer is expected to carry
-  a `found` list (below). `dossier_id` is informational: the server saves
-  your answer into that dossier itself.
+  Each request: `{"id", "dossier_id", "scope", "prompt", "snippet",
+  "context"}`. Scope `"snippet"` carries the snippet dict (`kind`
+  file|mail, `ref`, `content` possibly truncated, `truncated`, `account`,
+  `folder`, `name`, and for files `disk_path` relative to the stash root).
+  Scope `"session"` is the TOP box — snippet is null, the prompt concerns
+  the whole dossier, and your answer is expected to carry a `found` list
+  (below). `dossier_id` is informational: the server saves your answer
+  into that dossier itself.
+
+  **`context` is your memory.** You may be a fresh session with no
+  recollection of earlier turns; the server sends everything you need:
+  - `dossier_thread`: the top box's conversation so far, oldest first,
+    `[{prompt, response, finished}]` (the most recent turns).
+  - `items`: what the dossier currently holds, `[{ref, kind, name}]`.
+  - `tasks`, `view`: the current goals/tasks list and diagram view.
+  - `item_thread` (snippet scope only): that item's own conversation.
+  Treat EVERY prompt as a follow-up in that thread. Jeff will type things
+  like "find more emails" or "which of these mention money" with no
+  restated topic — read the topic from `dossier_thread` (and the item
+  list) and carry on. A session-scope `found` list should normally
+  INCLUDE the existing item refs (the merge rule replaces the list with
+  what you send); drop items only when the prompt asks to narrow or
+  remove. Do not read dossier files or queue archives for history —
+  `context` is the whole mechanism.
 
 - Post a status note WHILE working (repeatedly, at every step change; ~25
   chars show; terse present tense, e.g. `scanning work/text`):

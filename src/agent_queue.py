@@ -10,9 +10,11 @@ Layout (dirs created on demand, root set by config agent.queue_dir):
                                 overwritten while it works; shown by the
                                 spinner so the user can tell scan vs. stall
 
-Request json:  {"id", "dossier_id", "scope", "prompt", "snippet"} -- scope
-"snippet" carries the full snippet dict; scope "session" (the top box)
-carries snippet null. dossier_id says which dossier the answer saves into.
+Request json:  {"id", "dossier_id", "scope", "prompt", "snippet", "context"}
+-- scope "snippet" carries the full snippet dict; scope "session" (the top
+box) carries snippet null. context is the agent's memory: the dossier's
+conversation thread, its items, tasks, view, and (snippet scope) that
+item's own thread -- see dossier.rule_request_context.
 Response json: {"id", "kind", "response": "<plain text>", "found": [...]}
 where found (session scope only) lists item refs the agent picked as the
 dossier's items. The agent may also send "view" and "tasks" (session
@@ -124,14 +126,14 @@ def rule_request_id():
     return stamp + "_" + str(_counter).zfill(3)
 
 
-def write_request(dossier_id, snippet, prompt):
+def write_request(dossier_id, snippet, prompt, context):
     """Drop a request file for the agent; returns the new request id."""
     request_id = rule_request_id()
     scope = "snippet"
     if snippet is None:
         scope = "session"
     payload = {"id": request_id, "dossier_id": dossier_id, "scope": scope,
-               "prompt": prompt, "snippet": snippet}
+               "prompt": prompt, "snippet": snippet, "context": context}
     path = requests_dir() / (request_id + ".json")
     with open(path, "w") as f:
         json.dump(payload, f, indent=2)

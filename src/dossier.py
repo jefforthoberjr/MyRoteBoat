@@ -14,13 +14,20 @@ dossier.json shape (the template's contract):
     prompt           the top-box text as last submitted
     prompt_response  the agent's answer to the top box ("" until answered)
     prompt_finished  when that answer landed ("" until answered)
+    thread           the top box's conversation so far, oldest first:
+                     [{"prompt", "response", "finished"}] -- appended on
+                     every session-scope answer; sent to the agent as its
+                     memory of the dossier
     view             "explore" (one wide item diagram) | "mapping" (items
                      left, goals/tasks right); the agent's call, user-toggled
     tasks            [{"label", "kind": "goal"|"task", "goal": <goal label or ""}]
                      the mapping view's right-hand diagram; [] until the
                      agent sends some
     items            [{"ref": <stash path or mail:<acct>:<idx>>,
-                       "chat_response": "", "finished": ""}]
+                       "kind": "file"|"mail", "name": <display name>,
+                       "chat_response": "", "finished": "",
+                       "thread": [{"prompt", "response", "finished"}]}]
+                     each item carries its own conversation thread
                      (older files used "disk_path"; load_dossier migrates)
 """
 import json
@@ -81,7 +88,7 @@ def rule_merge_found(items, found_paths):
                 merged.append(by_ref[ref])
             else:
                 merged.append({"ref": ref, "chat_response": "",
-                               "finished": ""})
+                               "finished": "", "thread": []})
     return merged
 
 
@@ -118,6 +125,7 @@ def create_dossier(prompt):
         "prompt_finished": "",
         "view": CONFIG["dossiers"]["default_view"],
         "tasks": [],
+        "thread": [],
         "items": [],
     }
     dossier_dir(dossier["id"]).mkdir(parents=True, exist_ok=True)
@@ -148,6 +156,20 @@ def load_dossier(dossier_id):
         if "view" not in result:    # pre-mapping dossiers
             result["view"] = CONFIG["dossiers"]["default_view"]
             result["tasks"] = []
+        if "thread" not in result:  # pre-thread dossiers: seed from latest
+            result["thread"] = []
+            if result.get("prompt_response", "") != "":
+                result["thread"].append({"prompt": result["prompt"],
+                                         "response": result["prompt_response"],
+                                         "finished": result.get("prompt_finished", "")})
+            for item in result["items"]:
+                item["thread"] = []
+                if item.get("chat_response", "") != "":
+                    item["thread"].append({"prompt": "",
+                                           "response": item["chat_response"],
+                                           "finished": item.get("finished", "")})
+            _fill_item_names(result["items"])
+            save_dossier(result)   # one-time upgrade, written back
     return result
 
 
@@ -182,6 +204,27 @@ def valid_found_paths(found_paths):
     return kept, dropped
 
 
+def rule_request_context(dossier, ref):
+    """What the agent gets as memory with a request (config
+    dossiers.context_turns caps each thread, newest kept). Session scope
+    (ref None): the dossier thread, the items (ref/kind/name), tasks,
+    view. Snippet scope: that item's thread plus the dossier thread, so a
+    per-item question can lean on the overall topic too."""
+    turns = CONFIG["dossiers"]["context_turns"]
+    context = {"view": dossier["view"], "tasks": dossier["tasks"],
+               "dossier_thread": dossier["thread"][-turns:], "items": []}
+    for item in dossier["items"]:
+        context["items"].append({"ref": item["ref"],
+                                 "kind": item.get("kind", ""),
+                                 "name": item.get("name", "")})
+    if ref is not None:
+        context["item_thread"] = []
+        for item in dossier["items"]:
+            if item["ref"] == ref:
+                context["item_thread"] = item["thread"][-turns:]
+    return context
+
+
 def valid_tasks(raw_tasks):
     """Normalize an agent's goals/tasks list: each entry needs a non-empty
     label; kind defaults to "task" (only "goal"/"task" allowed); goal is
@@ -210,10 +253,14 @@ def apply_response(request_payload, kind, response_text, found_paths,
     dossier = load_dossier(request_payload["dossier_id"])
     if dossier is not None and kind == "answer":
         stamp = rule_finished_stamp()
+        turn = {"prompt": request_payload["prompt"],
+                "response": response_text, "finished": stamp}
         if request_payload["scope"] == "session":
             dossier["prompt_response"] = response_text
             dossier["prompt_finished"] = stamp
+            dossier["thread"].append(turn)
             dossier["items"] = rule_merge_found(dossier["items"], found_paths)
+            _fill_item_names(dossier["items"])
             if view in ("explore", "mapping"):
                 dossier["view"] = view
             if tasks is not None:
@@ -224,8 +271,19 @@ def apply_response(request_payload, kind, response_text, found_paths,
                 if item["ref"] == target:
                     item["chat_response"] = response_text
                     item["finished"] = stamp
+                    item["thread"].append(turn)
         save_dossier(dossier)
     return dossier
+
+
+def _fill_item_names(items):
+    """Items store kind + display name (for the agent's context and the
+    landing page) -- filled once, when first merged in."""
+    for item in items:
+        if "name" not in item and snippets.ref_exists(item["ref"]):
+            snippet = snippets.load_item(item["ref"])
+            item["kind"] = snippet["kind"]
+            item["name"] = snippet["name"]
 
 
 def set_view(dossier_id, view):

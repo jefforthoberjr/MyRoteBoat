@@ -11,7 +11,9 @@ paths:
       summary: List pending request payloads, oldest first.
       responses:
         '200':
-          description: '{"requests": [{id, scope, prompt, snippet}, ...]}'
+          description: '{"requests": [{id, dossier_id, scope, prompt, snippet, context},
+            ...]} -- context: {view, tasks, dossier_thread: [{prompt, response, finished}],
+            items: [{ref, kind, name}], item_thread (snippet scope only)}'
   /agent/respond:
     post:
       tags:

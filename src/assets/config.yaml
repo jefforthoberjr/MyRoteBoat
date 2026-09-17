@@ -33,6 +33,7 @@ dossiers:
   dir: "dossiers"          # saved dossiers root (repo-relative): <id>/dossier.json + session.log
   title_chars: 60          # landing-list title = prompt's first line cut here
   default_view: "explore"  # diagram view for a new dossier until the agent/user picks: explore | mapping
+  context_turns: 10        # most recent thread turns sent to the agent with each request
   found_merge: "replace"   # session answer's found list replaces the items (keeps surviving chats)
   # found_merge: "append"  # keep existing items, add newly found ones after
 

@@ -84,6 +84,20 @@
   .diagram.mapping .diagram-pane.hidden { display: block; }
   .diagram.mapping .diagram-pane-items { border-right: 1px solid #ccc; }
   .diagram.mapping { max-height: 60vh; }
+  /* Always-visible scrollbar on the diagram box: macOS hides overlay
+     scrollbars until you scroll, so a clean clip between two rows of
+     boxes looked like the end. Styling ::-webkit-scrollbar switches
+     Chrome/Safari to a classic, always-drawn bar; scrollbar-color is the
+     Firefox equivalent. Wide and dark on purpose. */
+  .diagram { scrollbar-color: #777 #e7e4da; scrollbar-width: auto; }
+  .diagram::-webkit-scrollbar { width: 16px; height: 16px; }
+  .diagram::-webkit-scrollbar-track { background: #e7e4da; }
+  .diagram::-webkit-scrollbar-thumb {
+    background: #777;
+    border: 3px solid #e7e4da;
+    border-radius: 8px;
+  }
+  .diagram::-webkit-scrollbar-thumb:hover { background: #444; }
   /* Legend: a one-row mermaid diagram of the kind colors, above the items. */
   .legend {
     margin: 0 1rem 0.5rem 1rem;
@@ -482,8 +496,19 @@
   // reach diagramClick below. Node index -> item ref via DIAGRAM_REFS, so
   // a refreshed diagram (renumbered nodes) still finds the right row.
   let DIAGRAM_REFS = {{ diagram_refs | tojson }};
-  mermaid.initialize({ startOnLoad: true, securityLevel: "loose",
+  mermaid.initialize({ startOnLoad: false, securityLevel: "loose",
                        theme: "neutral" });
+  mermaid.run({ querySelector: ".mermaid" }).then(pinDiagramSizes);
+
+  function pinDiagramSizes() {
+    // Mermaid emits width=100% with the drawing's natural width in
+    // max-width, so a big diagram shrinks to fit instead of overflowing.
+    // Pin it to natural size: the box then scrolls (with the always-on
+    // scrollbars) and boxes stay readable. The legend keeps its own rule.
+    document.querySelectorAll(".diagram svg").forEach(function (svg) {
+      svg.style.width = svg.style.maxWidth;
+    });
+  }
   function diagramClick(idx) {
     const ref = DIAGRAM_REFS[idx];
     const row = document.querySelector('.row[data-ref="' + CSS.escape(ref) + '"]');
@@ -518,6 +543,7 @@
       mermaid.render(svgId, source).then(function (out) {
         pane.innerHTML = out.svg;
         if (out.bindFunctions) { out.bindFunctions(pane); }
+        pinDiagramSizes();
       });
     }
   }

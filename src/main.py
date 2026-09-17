@@ -181,21 +181,25 @@ def handle_process():
     dossier_id = body["dossier_id"]
     ref = body["ref"]
     prompt = body["prompt"]
+    dossier = dossier_store.load_dossier(dossier_id)
     snippet = None
     log_path = "SESSION"
     if ref is not None:
         snippet = load_item(ref)
         log_path = ref
-    else:
+    elif dossier is not None:
         # The top box's text is the dossier's prompt; keep edits.
-        dossier = dossier_store.load_dossier(dossier_id)
-        if dossier is not None:
-            dossier["prompt"] = prompt
-            dossier_store.save_dossier(dossier)
+        dossier["prompt"] = prompt
+        dossier_store.save_dossier(dossier)
+    context = {}
+    if dossier is not None:
+        context = dossier_store.rule_request_context(dossier, ref)
     session_log.emit("20001", "process clicked",
                      "dossier=" + dossier_id + " path=" + log_path
-                     + " prompt_chars=" + str(len(prompt)))
-    request_id = agent_queue.write_request(dossier_id, snippet, prompt)
+                     + " prompt_chars=" + str(len(prompt))
+                     + " thread_turns=" + str(len(context.get("dossier_thread", []))))
+    request_id = agent_queue.write_request(dossier_id, snippet, prompt,
+                                           context)
     session_log.emit("20002", "request file written", "id=" + request_id)
     return jsonify({"request_id": request_id})
 
@@ -369,7 +373,7 @@ def handle_agent_requests():
       summary: List pending request payloads, oldest first.
       responses:
         200:
-          description: '{"requests": [{id, scope, prompt, snippet}, ...]}'
+          description: '{"requests": [{id, dossier_id, scope, prompt, snippet, context}, ...]} -- context: {view, tasks, dossier_thread: [{prompt, response, finished}], items: [{ref, kind, name}], item_thread (snippet scope only)}'
     """
     pending = agent_queue.list_pending_requests()
     if len(pending) > 0:

@@ -6,6 +6,8 @@ pinned 11.4.1) renders it.
 Node ids are item<index> matching the row/chat ids in the page, so a click
 on a node scrolls to its row. Arrows show email chains; which chain rule
 applies is config diagram.chain."""
+import re
+
 from config import CONFIG
 
 
@@ -68,11 +70,16 @@ def rule_legend_source():
 
 
 def rule_node_label(snippet):
-    """What a node says: account tag + name, name cut at
-    diagram.label_chars. No dates (they cluttered the boxes); a chain's
-    order is carried by its arrows."""
-    name = snippet["name"][:CONFIG["diagram"]["label_chars"]]
-    label = snippet["account"] + ": " + name
+    """What a node says, kept high level on purpose: a file shows its
+    name minus extensions ("house sitting.docx.txt" -> "house sitting");
+    an email shows its subject in double quotes, like citing a title. No
+    date, no account tag -- both still show in the item's provenance line
+    down in the left column. Cut at diagram.label_chars."""
+    name = snippet["name"]
+    if snippet["kind"] == "mail":
+        label = '"' + name[:CONFIG["diagram"]["label_chars"]] + '"'
+    else:
+        label = _strip_extensions(name)[:CONFIG["diagram"]["label_chars"]]
     return _escape_label(label)
 
 
@@ -143,6 +150,20 @@ def _class_defs():
         lines.append("classDef " + kind + " fill:" + colors["fill"]
                      + ",stroke:" + colors["stroke"] + ";")
     return lines
+
+
+def _strip_extensions(name):
+    """Peel every trailing extension off a file name: the extracted-text
+    files carry two (".docx.txt"). An extension is a short (<= 5 chars)
+    suffix with at least one letter, so "v1.2" survives but ".txt" goes."""
+    pieces = name.split(".")
+    while len(pieces) > 1:
+        tail = pieces[-1]
+        if len(tail) <= 5 and re.search(r"[A-Za-z]", tail) is not None:
+            pieces.pop()
+        else:
+            break
+    return ".".join(pieces)
 
 
 def _escape_label(text):

@@ -82,6 +82,13 @@ that state goals). The runtime agent sets the view on its session-scope
 answer when it can judge; the two view buttons on the page override it and
 the choice is saved in the dossier.
 
+## dossiers.context_turns
+Every request carries the agent's memory: the dossier's conversation
+thread (every top-box prompt with its answer) and, for a per-item request,
+that item's own thread. This caps how many of the most recent turns go
+along, so a long-running dossier does not bloat every request. Threads are
+stored in full in dossier.json regardless.
+
 ## dossiers.found_merge
 What happens to a dossier's items when the agent answers the top (session
 scope) prompt with a `found` list. `replace`: the agent's list becomes the
